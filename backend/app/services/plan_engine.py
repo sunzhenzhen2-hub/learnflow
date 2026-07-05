@@ -622,13 +622,22 @@ def _llm_generate_batch(topic, goal_desc, goal_emphasis, level,
     "core_20_percent": "本周最核心的20%内容（1-2句话，能解决80%问题的关键知识）",
     "resources": [
       {{
-        "type": "video/article/doc",
-        "title": "资源标题",
-        "url": "https://...",
+        "type": "doc",
+        "title": "官方文档名称（必须是真实存在的文档链接）",
+        "url": "https://官方文档真实URL",
         "platform": "平台名",
         "level": "入门/进阶/高级",
         "duration": "预计耗时",
-        "why": "为什么值得看（一句话）"
+        "why": "为什么值得看"
+      }},
+      {{
+        "type": "video",
+        "title": "B站视频标题（优先B站视频）",
+        "url": "https://www.bilibili.com/video/BVxxxxx",
+        "platform": "B站",
+        "level": "入门/进阶/高级",
+        "duration": "预计耗时",
+        "why": "为什么值得看"
       }}
     ],
     "project_task": "本周实践任务描述（中文，具体可执行）",
@@ -639,12 +648,17 @@ def _llm_generate_batch(topic, goal_desc, goal_emphasis, level,
 
 要求:
 1. 所有内容使用中文
-2. 资源推荐真实的、知名的学习资源（B站视频、官方文档、经典书籍等）
-3. 每周精选3-5个资源，标注难度和推荐理由
-4. 每周明确标注核心20%内容
-5. 内容难度按5级学习阶梯递进
-6. 实践任务要具体、可执行
-7. 紧扣学习目标: {goal_desc}
+2. 每周精选3-5个资源，标注难度和推荐理由
+3. 资源类型要求:
+   - 每周必须至少有1个type为"doc"的文档资源（官方文档、技术规范、教程文档等）
+   - 视频资源优先推荐B站(bilibili.com)和微信视频号，其次是YouTube
+   - 文档资源优先官方文档（如 docs.python.org, react.dev 等）
+4. URL必须是真实存在的、可访问的链接，不要编造URL。只推荐你确定存在的资源。
+5. 每个资源标注: type(video/article/doc)、title、url、platform、level、duration、why
+6. 每周明确标注核心20%内容
+7. 内容难度按5级学习阶梯递进
+8. 实践任务要具体、可执行
+9. 紧扣学习目标: {goal_desc}
 
 只返回JSON，不要其他文字。"""
 

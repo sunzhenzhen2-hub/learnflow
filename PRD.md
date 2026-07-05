@@ -1,5 +1,7 @@
 # LearnFlow 产品需求文档（PRD）
 
+**[English Version](PRD_EN.md)**
+
 **版本：** v0.1.0  
 **最后更新：** 2026-07-05  
 **状态：** MVP 已上线

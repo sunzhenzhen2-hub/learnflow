@@ -1,5 +1,7 @@
 # LearnFlow — AI 驱动的学习执行系统
 
+**[English Version](README_EN.md)**
+
 LearnFlow 是一个个人学习执行 APP，核心理念是**强制输出闭环**：每一步学习都必须通过 AI 评审才能解锁下一步，确保知识真正被吸收而非只是"看过"。
 
 ## 核心机制

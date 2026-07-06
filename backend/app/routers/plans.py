@@ -73,6 +73,7 @@ def wizard_create_plan(wizard: PlanWizardInput, db: Session = Depends(get_db)):
             title=step_data["title"],
             content=step_data.get("content", ""),
             resources=step_data.get("resources"),
+            doc_content=step_data.get("doc_content"),
             core_20_percent=step_data.get("core_20_percent"),
             test_question=step_data.get("test_question"),
             test_answer_hint=step_data.get("test_answer_hint"),

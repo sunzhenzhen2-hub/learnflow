@@ -56,18 +56,43 @@
         <h4>{{ $t('learning.resources') }}</h4>
         <div class="resource-list">
           <div v-for="(res, i) in selectedStep.resources" :key="i" class="resource-item">
-            <el-icon :color="resourceColor(res.type)">
-              <VideoPlay v-if="res.type === 'video'" />
-              <Document v-else-if="res.type === 'article'" />
-              <Notebook v-else />
-            </el-icon>
-            <div class="resource-info">
-              <a v-if="res.url" :href="res.url" target="_blank" class="resource-link">{{ res.title }}</a>
-              <span v-else class="resource-link">{{ res.title }}</span>
-              <span class="resource-meta">{{ res.platform }}{{ res.duration ? ' · ' + res.duration : '' }}</span>
-            </div>
+            <!-- Embedded video player -->
+            <template v-if="res.type === 'video' && res.embed_url">
+              <div class="video-player-wrapper">
+                <iframe
+                  :src="res.embed_url"
+                  scrolling="no"
+                  frameborder="0"
+                  allowfullscreen="true"
+                  class="video-iframe"
+                ></iframe>
+              </div>
+              <div class="resource-video-info">
+                <span class="resource-link">{{ res.title }}</span>
+                <span class="resource-meta">{{ res.platform }}{{ res.duration ? ' \u00b7 ' + res.duration : '' }}</span>
+              </div>
+            </template>
+            <!-- Non-video resources -->
+            <template v-else>
+              <el-icon :color="resourceColor(res.type)">
+                <VideoPlay v-if="res.type === 'video'" />
+                <Document v-else-if="res.type === 'article'" />
+                <Notebook v-else />
+              </el-icon>
+              <div class="resource-info">
+                <a v-if="res.url && res.type !== 'video'" :href="res.url" target="_blank" class="resource-link">{{ res.title }}</a>
+                <span v-else class="resource-link">{{ res.title }}</span>
+                <span class="resource-meta">{{ res.platform }}{{ res.duration ? ' \u00b7 ' + res.duration : '' }}</span>
+              </div>
+            </template>
           </div>
         </div>
+      </div>
+
+      <!-- Inline Document Content (Markdown rendered in-app) -->
+      <div class="doc-section" v-if="selectedStep.doc_content">
+        <h4>{{ $t('learning.knowledgeDoc') || '\u77e5\u8bc6\u6587\u6863' }}</h4>
+        <div class="markdown-content" v-html="docHtml"></div>
       </div>
 
       <!-- Core 20% Highlight -->
@@ -197,6 +222,66 @@ const typeTag = (t) => ({ study: 'info', project: 'success', deep_project: 'warn
 const typeLabel = (type) => t('learning.stepTypes.' + type) || type
 
 const resourceColor = (type) => ({ video: '#409eff', article: '#67c23a', doc: '#e6a23c' }[type] || '#909399')
+
+const renderMarkdown = (md) => {
+  if (!md) return ''
+  const codeBlocks = []
+  let html = md.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+    codeBlocks.push('<pre><code class="lang-' + (lang || 'text') + '">' + code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').trim() + '</code></pre>')
+    return '\n%%CB' + (codeBlocks.length - 1) + '%%\n'
+  })
+  html = html.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>')
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>')
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>')
+  html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+  html = html.replace(/\*(.+?)\*/g, '<em>$1</em>')
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>')
+  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+  const lines = html.split('\n')
+  const result = []
+  let inList = false
+  let inBlockquote = false
+  for (const line of lines) {
+    const trimmed = line.trim()
+    const cbMatch = trimmed.match(/^%%CB(\d+)%%$/)
+    if (cbMatch) {
+      if (inList) { result.push('</ul>'); inList = false }
+      if (inBlockquote) { result.push('</blockquote>'); inBlockquote = false }
+      result.push(codeBlocks[parseInt(cbMatch[1])])
+      continue
+    }
+    if (trimmed.startsWith('&gt; ')) {
+      if (inList) { result.push('</ul>'); inList = false }
+      if (!inBlockquote) { result.push('<blockquote>'); inBlockquote = true }
+      result.push('<p>' + trimmed.substring(4) + '</p>')
+      continue
+    } else if (inBlockquote) {
+      result.push('</blockquote>'); inBlockquote = false
+    }
+    const listMatch = trimmed.match(/^[-*]\s+(.+)$/)
+    if (listMatch) {
+      if (!inList) { result.push('<ul>'); inList = true }
+      result.push('<li>' + listMatch[1] + '</li>')
+      continue
+    } else if (inList) {
+      result.push('</ul>'); inList = false
+    }
+    const olMatch = trimmed.match(/^(\d+)\.\s+(.+)$/)
+    if (olMatch) {
+      result.push('<p>' + olMatch[1] + '. ' + olMatch[2] + '</p>')
+      continue
+    }
+    if (trimmed === '') { result.push(''); continue }
+    if (!trimmed.startsWith('<')) { result.push('<p>' + trimmed + '</p>') }
+    else { result.push(trimmed) }
+  }
+  if (inList) result.push('</ul>')
+  if (inBlockquote) result.push('</blockquote>')
+  return result.join('\n')
+}
+
+const docHtml = computed(() => renderMarkdown(selectedStep.value?.doc_content))
 
 const dialogTitle = computed(() =>
   selectedStep.value?.test_question ? t('learning.testTitle') : t('learning.outputTitle')
@@ -400,6 +485,51 @@ watch(currentWeek, () => { selectedStep.value = null })
 }
 .cheatsheet-text { font-size: 13px; line-height: 1.8; color: #606266; white-space: pre-wrap; }
 
+.video-player-wrapper {
+  position: relative;
+  width: 100%;
+  padding-bottom: 56.25%;
+  height: 0;
+  overflow: hidden;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: #000;
+}
+.video-iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+.resource-video-info {
+  padding: 4px 0;
+}
+
+.doc-section {
+  background: #f5f7fa;
+  padding: 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  border-left: 3px solid #67c23a;
+}
+
+.markdown-content { line-height: 1.8; font-size: 14px; color: #303133; }
+.markdown-content :deep(h1) { font-size: 20px; margin: 16px 0 8px; }
+.markdown-content :deep(h2) { font-size: 17px; margin: 14px 0 6px; color: #303133; border-bottom: 1px solid #ebeef5; padding-bottom: 4px; }
+.markdown-content :deep(h3) { font-size: 15px; margin: 12px 0 4px; color: #606266; }
+.markdown-content :deep(p) { margin: 6px 0; }
+.markdown-content :deep(code) { background: #f0f2f5; padding: 2px 6px; border-radius: 3px; font-size: 13px; color: #e6a23c; }
+.markdown-content :deep(pre) { background: #282c34; color: #abb2bf; padding: 14px; border-radius: 6px; overflow-x: auto; margin: 10px 0; }
+.markdown-content :deep(pre code) { background: transparent; color: inherit; padding: 0; font-size: 13px; }
+.markdown-content :deep(blockquote) { border-left: 3px solid #409eff; padding: 8px 14px; margin: 10px 0; color: #606266; background: #ecf5ff; border-radius: 0 4px 4px 0; }
+.markdown-content :deep(ul) { padding-left: 20px; margin: 6px 0; }
+.markdown-content :deep(li) { margin: 4px 0; }
+.markdown-content :deep(a) { color: #409eff; text-decoration: none; }
+.markdown-content :deep(a:hover) { text-decoration: underline; }
+.markdown-content :deep(strong) { color: #303133; }
+
 @media (max-width: 480px) {
   .week-nav {
     padding: 10px;
@@ -432,6 +562,19 @@ watch(currentWeek, () => { selectedStep.value = null })
   .content-section,
   .test-section {
     padding: 12px;
+  }
+
+  .doc-section {
+    padding: 12px;
+  }
+
+  .markdown-content :deep(pre) {
+    padding: 10px;
+    font-size: 12px;
+  }
+
+  .video-player-wrapper {
+    border-radius: 4px;
   }
 
   .actions {

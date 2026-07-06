@@ -94,8 +94,9 @@ Beyond the two core Skills embedded in the backend, LearnFlow also includes two 
 | Backend | FastAPI | Python async web framework |
 | Database | SQLite + SQLAlchemy | Zero-config local storage |
 | LLM | OpenAI-compatible API | Supports any OpenAI-compatible endpoint (currently MiMo V2.5) |
-| Notifications | Feishu / DingTalk / Windows Toast | Multi-channel learning reminders |
+| Notifications | Feishu / DingTalk / Desktop native / WeChat subscription | Multi-channel learning reminders |
 | Scheduler | APScheduler | Daily reminder tasks |
+| WeChat Mini Program | uni-app (Vue 3) | Cross-platform mini program, shared backend API |
 
 ## Project Structure
 
@@ -113,6 +114,7 @@ learnflow/
 │       ├── models.py               # ORM models (5 tables)
 │       ├── schemas.py              # Pydantic request/response schemas
 │       ├── routers/                # API route layer
+│       │   ├── auth.py             # WeChat login + dev login
 │       │   ├── plans.py            # Learning plan CRUD + Wizard creation
 │       │   ├── steps.py            # Learning step queries + state transitions
 │       │   ├── review.py           # AI review (Socratic + Feynman + cheat sheet)
@@ -127,7 +129,8 @@ learnflow/
 │           ├── dashboard.py        # Dashboard data aggregation
 │           ├── profile.py          # Personal profile statistics
 │           ├── scheduler.py        # APScheduler timed reminders
-│           └── notifiers/          # Multi-channel notifications (Feishu/DingTalk/Windows Toast)
+│           ├── wx_notify.py        # WeChat subscription message service
+│           └── notifiers/          # Multi-channel notifications (desktop/Feishu/DingTalk/WeChat)
 └── frontend/
     ├── index.html
     ├── package.json
@@ -164,6 +167,31 @@ learnflow/
                 ├── LLMConfig.vue   # LLM API configuration
                 ├── DingTalkConfig.vue  # DingTalk configuration
                 └── FeishuConfig.vue    # Feishu configuration
+└── miniapp/                        # WeChat Mini Program (uni-app Vue 3)
+    ├── package.json
+    ├── manifest.json               # uni-app config
+    ├── pages.json                  # Page routes + TabBar
+    ├── vite.config.js
+    └── src/
+        ├── App.vue                 # Root component (auto-login)
+        ├── main.js                 # Vue entry
+        ├── api/
+        │   └── client.js           # uni.request wrapper (9 API modules)
+        ├── utils/
+        │   └── markdown.js         # Markdown parser (structured output)
+        ├── components/
+        │   ├── MarkdownViewer.vue  # Document rendering component
+        │   ├── VideoPlayer.vue     # Video player (native video + external card)
+        │   └── StepCard.vue        # Step card component
+        ├── stores/
+        │   └── plan.js             # Pinia state management
+        └── pages/
+            ├── dashboard/index.vue # Dashboard
+            ├── learn/index.vue     # Learning page
+            ├── wizard/index.vue    # Plan creation wizard
+            ├── profile/index.vue   # Profile
+            ├── review/index.vue    # AI review results
+            └── settings/index.vue  # Settings
 ```
 
 ## Data Model
@@ -186,6 +214,8 @@ learnflow/
 
 | Method | Path | Description |
 |---|---|---|
+| POST | `/api/auth/wx-login` | WeChat mini program login (code → token) |
+| POST | `/api/auth/dev-login` | Development login (no credentials) |
 | GET | `/api/health` | Health check |
 | GET | `/api/dashboard` | Dashboard aggregated data |
 | GET | `/api/plans/` | Plan list |
@@ -219,11 +249,21 @@ learnflow/
 ```bash
 cd learnflow/backend
 
+# Create virtual environment (recommended)
+python -m venv venv
+
+# Activate virtual environment
+# Windows:
+venv\Scripts\activate
+# macOS / Linux:
+source venv/bin/activate
+
 # Install dependencies
 pip install -r requirements.txt
 
 # Configure LLM API (optional, falls back to topic library if not configured)
-# Edit .env file:
+cp .env.example .env
+# Edit .env file with your API config:
 # LLM_API_BASE=https://your-api-endpoint/v1
 # LLM_API_KEY=your-key
 # LLM_MODEL=your-model
@@ -256,6 +296,130 @@ cd backend && python -m uvicorn app.main:app --host 0.0.0.0 --port 8001
 
 After building, only the backend needs to run. Visit `http://localhost:8001` to use the full application.
 
+### WeChat Mini Program
+
+```bash
+cd learnflow/miniapp
+
+# Install dependencies
+npm install
+
+# Dev mode (H5, browser debugging)
+npm run dev:h5
+
+# Build WeChat mini program
+npm run build:mp-weixin
+# Output to dist/build/mp-weixin/
+# Import this directory into WeChat Developer Tools
+```
+
+Mini program configuration:
+
+1. Set `WX_APPID` and `WX_SECRET` in `backend/.env`
+2. Create a subscription message template in WeChat MP console, copy the template ID to `WX_TEMPLATE_ID`
+3. Update `wxTemplateId` in `miniapp/src/pages/settings/index.vue` with the actual template ID
+
+## Cross-Platform Deployment
+
+LearnFlow supports Windows, macOS, and Linux. All core dependencies are cross-platform compatible. Below are the platform-specific differences.
+
+### Platform Comparison
+
+| Component | Windows | macOS | Linux |
+|---|---|---|---|
+| Python deps | All universal | All universal | All universal |
+| Desktop notifications | `win11toast` (optional) + PowerShell fallback | `osascript` (built-in) | `notify-send` (requires libnotify) |
+| Feishu notifications | `lark-cli.cmd` | `lark-cli` | `lark-cli` |
+| DingTalk notifications | `dws.exe` | `dws` | `dws` |
+| Process management | `python -m uvicorn ...` | `python -m uvicorn ...` | `python -m uvicorn ...` |
+
+### Windows Additional Dependencies
+
+```powershell
+# Desktop notifications (optional, falls back to PowerShell native notifications if not installed)
+pip install win11toast==0.9
+```
+
+### macOS Additional Configuration
+
+```bash
+# Desktop notifications: built-in osascript works out of the box, no extra install needed
+# For richer notifications (clickable, actionable), optionally install terminal-notifier:
+brew install terminal-notifier
+
+# Feishu/DingTalk: ensure the CLI tools are in PATH, or specify paths in .env
+# LARK_CLI_PATH=/usr/local/bin/lark-cli
+# DWS_CLI_PATH=/usr/local/bin/dws
+```
+
+### Linux Additional Configuration
+
+```bash
+# Desktop notifications (most desktop distros ship libnotify pre-installed)
+# Debian/Ubuntu:
+sudo apt install libnotify-bin
+# Fedora/RHEL:
+sudo dnf install libnotify
+# Arch:
+sudo pacman -S libnotify
+
+# Headless servers (no desktop): desktop notifications unavailable, use Feishu/DingTalk channels instead
+
+# Feishu/DingTalk: ensure the CLI tools are in PATH, or specify paths in .env
+```
+
+### Environment Variable Configuration
+
+Copy `backend/.env.example` to `backend/.env` and fill in values per the comments:
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Key configuration variables:
+
+| Variable | Description | Required |
+|---|---|---|
+| `LLM_API_BASE` | OpenAI-compatible API endpoint URL | No (uses presets if empty) |
+| `LLM_API_KEY` | API key | No |
+| `LLM_MODEL` | Model name | No |
+| `LARK_CLI_PATH` | Feishu CLI path (overrides default search) | No |
+| `DWS_CLI_PATH` | DingTalk CLI path (overrides default search) | No |
+| `WX_APPID` | WeChat Mini Program AppID | Required for mini program |
+| `WX_SECRET` | WeChat Mini Program Secret | Required for mini program |
+| `WX_TEMPLATE_ID` | WeChat subscription message template ID | Optional (needed for subscription messages) |
+
+### Docker Deployment (Optional)
+
+```dockerfile
+FROM python:3.12-slim
+WORKDIR /app
+
+# Install Node.js for frontend build
+RUN apt-get update && apt-get install -y curl && \
+    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+    apt-get install -y nodejs && rm -rf /var/lib/apt/lists/*
+
+# Install backend dependencies
+COPY backend/requirements.txt backend/
+RUN pip install --no-cache-dir -r backend/requirements.txt
+
+# Build frontend
+COPY frontend/ frontend/
+RUN cd frontend && npm install && npm run build
+
+# Copy backend code
+COPY backend/ backend/
+
+EXPOSE 8001
+CMD ["python", "-m", "uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+```
+
+```bash
+docker build -t learnflow .
+docker run -p 8001:8001 -v $(pwd)/data:/app/data learnflow
+```
+
 ## LLM Integration
 
 LearnFlow uses LLM for two core functions:
@@ -267,11 +431,17 @@ Supports any OpenAI-compatible API. When LLM is unavailable, automatically falls
 
 ## Notification Channels
 
-| Channel | Implementation | Status |
-|---|---|---|
-| Windows Toast | `win11toast` native notifications | Enabled by default |
-| Feishu (Lark) | `lark-cli` CLI tool | Requires App ID/Secret |
-| DingTalk | `dws` CLI tool | Requires App Key/Secret |
+| Channel | Implementation | Platform | Status |
+|---|---|---|---|
+| Desktop (desktop) | Platform-native APIs | Windows / macOS / Linux | Auto-detected |
+| Windows Toast | `win11toast` + PowerShell fallback | Windows 10/11 | Requires win11toast (optional) |
+| macOS Notification | `osascript` (built-in) / `terminal-notifier` (optional) | macOS 10.15+ | Built-in, no install needed |
+| Linux Notification | `notify-send` (libnotify) / `zenity` (fallback) | Desktop Linux | Requires libnotify-bin |
+| Feishu (Lark) | `lark-cli` CLI tool | All platforms | Requires App ID/Secret |
+| DingTalk | `dws` CLI tool | All platforms | Requires App Key/Secret |
+| WeChat Subscription | WeChat API + wx_notify.py | WeChat Mini Program | Requires WX_APPID/WX_SECRET/template ID |
+
+The desktop notification channel accepts both `desktop` (recommended) and `windows` (backward-compatible) as the channel name. The system automatically detects the current platform and uses the appropriate notification API.
 
 ## License
 

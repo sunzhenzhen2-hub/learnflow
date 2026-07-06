@@ -39,6 +39,7 @@ def _migrate_columns():
         ("core_20_percent", "TEXT"),
         ("ladder_level", "INTEGER"),
         ("ladder_name", "VARCHAR(50)"),
+        ("doc_content", "TEXT"),
     ]
 
     with engine.connect() as conn:

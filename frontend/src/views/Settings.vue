@@ -47,19 +47,50 @@
     <!-- LLM Configuration -->
     <div class="card">
       <h3>{{ $t('settings.llmConfig') }}</h3>
+
+      <!-- 配置状态 -->
+      <div class="llm-status" :class="{ configured: llmConfigured }">
+        <el-icon :size="16"><component :is="llmConfigured ? 'CircleCheck' : 'Warning'" /></el-icon>
+        <span v-if="llmConfigured">{{ $t('settings.llmConfigured') }} — <strong>{{ llmForm.model }}</strong></span>
+        <span v-else>{{ $t('settings.llmNotConfigured') }}</span>
+      </div>
+
       <el-form :model="llmForm" label-position="top" size="small">
         <el-form-item :label="$t('settings.llmApiBase')">
           <el-input v-model="llmForm.api_base" placeholder="https://api.openai.com/v1" />
         </el-form-item>
         <el-form-item :label="$t('settings.llmApiKey')">
-          <el-input v-model="llmForm.api_key" type="password" show-password placeholder="sk-..." />
+          <el-input v-model="llmForm.api_key" type="password" show-password
+            :placeholder="llmHasKey ? '••••••••' : 'sk-...'" />
         </el-form-item>
         <el-form-item :label="$t('settings.llmModel')">
-          <el-input v-model="llmForm.model" placeholder="gpt-4o-mini" />
+          <el-select v-model="llmForm.model" filterable allow-create default-first-option
+            :placeholder="$t('settings.selectModel')" style="width: 100%;">
+            <el-option-group v-for="group in modelGroups" :key="group.provider" :label="group.provider">
+              <el-option v-for="m in group.models" :key="m.id" :value="m.id" :label="m.name">
+                <span>{{ m.name }}</span>
+                <span style="font-size:12px;color:#909399;margin-left:8px;">{{ m.description }}</span>
+              </el-option>
+            </el-option-group>
+          </el-select>
         </el-form-item>
-        <el-button type="primary" @click="saveLLMConfig" :loading="savingLLM">
-          {{ $t('settings.save') }}
-        </el-button>
+        <el-form-item :label="$t('settings.defaultModel')">
+          <el-select v-model="llmForm.default_model" filterable allow-create default-first-option
+            :placeholder="$t('settings.defaultModelHint')" style="width: 100%;">
+            <el-option v-for="m in presetModels" :key="m.id" :value="m.id" :label="m.name">
+              <span>{{ m.name }}</span>
+              <span style="font-size:12px;color:#909399;margin-left:8px;">{{ m.provider }}</span>
+            </el-option>
+          </el-select>
+        </el-form-item>
+        <div class="llm-actions">
+          <el-button type="primary" @click="saveLLMConfig" :loading="savingLLM">
+            {{ $t('settings.save') }}
+          </el-button>
+          <el-button @click="testLLMConfig" :loading="testingLLM" :disabled="!llmHasKey">
+            {{ $t('settings.test') }}
+          </el-button>
+        </div>
       </el-form>
     </div>
 
@@ -72,20 +103,33 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { planApi, reminderApi, configApi } from '../api/client'
 import { ElMessage } from 'element-plus'
 
 const { t } = useI18n()
 const plans = ref([])
-const llmForm = ref({ api_base: '', api_key: '', model: '' })
+const llmForm = ref({ api_base: '', api_key: '', model: '', default_model: '' })
 const savingLLM = ref(false)
+const testingLLM = ref(false)
+const llmHasKey = ref(false)
+const llmConfigured = ref(false)
+const presetModels = ref([])
 const channels = ref([
   { key: 'feishu', icon: 'ChatDotRound', enabled: false, testing: false },
   { key: 'dingtalk', icon: 'Message', enabled: false, testing: false },
   { key: 'windows', icon: 'Monitor', enabled: true, testing: false },
 ])
+
+const modelGroups = computed(() => {
+  const groups = {}
+  for (const m of presetModels.value) {
+    if (!groups[m.provider]) groups[m.provider] = { provider: m.provider, models: [] }
+    groups[m.provider].models.push(m)
+  }
+  return Object.values(groups)
+})
 
 const loadPlans = async () => {
   const { data } = await planApi.list()
@@ -123,17 +167,32 @@ const deletePlan = async (id) => {
 const loadLLMConfig = async () => {
   try {
     const { data } = await configApi.get()
-    llmForm.value = { api_base: data.api_base, api_key: data.has_key ? '••••••••' : '', model: data.model }
+    llmForm.value = {
+      api_base: data.api_base,
+      api_key: '',
+      model: data.model,
+      default_model: data.default_model || data.model,
+    }
+    llmHasKey.value = data.has_key
+    llmConfigured.value = data.configured
+  } catch (e) { console.error(e) }
+}
+
+const loadModels = async () => {
+  try {
+    const { data } = await configApi.models()
+    presetModels.value = data.models || []
   } catch (e) { console.error(e) }
 }
 
 const saveLLMConfig = async () => {
   savingLLM.value = true
   try {
-    const key = llmForm.value.api_key === '••••••••' ? '' : llmForm.value.api_key
+    const key = (!llmForm.value.api_key || llmForm.value.api_key.includes('•')) ? '' : llmForm.value.api_key
     await configApi.update({ ...llmForm.value, api_key: key })
     ElMessage.success(t('settings.llmSaved'))
-    llmForm.value.api_key = '••••••••'
+    llmHasKey.value = true
+    llmConfigured.value = true
   } catch (e) {
     ElMessage.error(t('settings.llmSaveFailed'))
   } finally {
@@ -141,7 +200,23 @@ const saveLLMConfig = async () => {
   }
 }
 
-onMounted(() => { loadPlans(); loadLLMConfig() })
+const testLLMConfig = async () => {
+  testingLLM.value = true
+  try {
+    const { data } = await configApi.test()
+    if (data.success) {
+      ElMessage.success(data.message)
+    } else {
+      ElMessage.error(data.message)
+    }
+  } catch (e) {
+    ElMessage.error(t('settings.testFailed', { name: 'LLM' }))
+  } finally {
+    testingLLM.value = false
+  }
+}
+
+onMounted(() => { loadPlans(); loadLLMConfig(); loadModels() })
 </script>
 
 <style scoped>
@@ -156,6 +231,13 @@ onMounted(() => { loadPlans(); loadLLMConfig() })
 .channel-actions { display: flex; gap: 8px; align-items: center; }
 .plan-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0f0f0; }
 .plan-progress { margin-left: 8px; color: #409eff; font-size: 14px; }
+.llm-status {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; border-radius: 8px; margin-bottom: 16px;
+  background: #fef0f0; color: #f56c6c; font-size: 13px;
+}
+.llm-status.configured { background: #f0f9eb; color: #67c23a; }
+.llm-actions { display: flex; gap: 8px; }
 
 @media (max-width: 480px) {
   .settings-view {

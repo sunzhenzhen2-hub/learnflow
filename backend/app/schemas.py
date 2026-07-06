@@ -50,6 +50,7 @@ class StepResponse(BaseModel):
     title: str
     content: Optional[str]
     resources: Optional[list[dict]] = None
+    doc_content: Optional[str] = None
     core_20_percent: Optional[str] = None
     test_question: Optional[str] = None
     duration_minutes: int
@@ -136,12 +137,28 @@ class LLMConfigUpdate(BaseModel):
     api_base: str
     api_key: str
     model: str
+    default_model: Optional[str] = None  # 指定默认模型
 
 
 class LLMConfigResponse(BaseModel):
     api_base: str
     model: str
+    default_model: Optional[str] = None  # 当前默认模型
     has_key: bool
+    configured: bool = False  # 是否已完成配置
+
+
+class LLMModelInfo(BaseModel):
+    id: str          # 模型标识
+    name: str        # 显示名称
+    provider: str    # 提供商
+    description: Optional[str] = None
+
+
+class LLMModelsResponse(BaseModel):
+    current_model: str
+    default_model: Optional[str] = None
+    models: list[LLMModelInfo]
 
 
 # --- Dashboard Schema ---

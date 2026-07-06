@@ -54,6 +54,7 @@ export const achievementApi = {
 export const configApi = {
   get: () => api.get('/llm-config'),
   update: (data) => api.put('/llm-config', data),
+  models: () => api.get('/llm-models'),
   test: () => api.post('/llm-config/test'),
 }
 

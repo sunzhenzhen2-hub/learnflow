@@ -4,7 +4,7 @@ Learning Output Reviewer - Skill 深度嵌入版
 """
 import json
 import re
-from ..config import settings
+from ..config import settings, effective_model
 
 
 def review_learning_output(
@@ -168,7 +168,7 @@ def _ai_review(step_title, step_content, user_output, step_type,
             f"{settings.LLM_API_BASE}/chat/completions",
             headers=headers,
             json={
-                "model": settings.LLM_MODEL,
+                "model": effective_model(),
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.3,
                 "response_format": {"type": "json_object"},

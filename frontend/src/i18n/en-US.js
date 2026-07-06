@@ -117,6 +117,7 @@ export default {
     passedMsg: 'Passed! Score: {score}/100',
     failedMsg: 'Score: {score}/100 - Needs improvement',
     reviewFailed: 'Review failed: ',
+    knowledgeDoc: 'Knowledge Document',
   },
   review: {
     title: 'AI Review',

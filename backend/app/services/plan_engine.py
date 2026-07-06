@@ -294,12 +294,19 @@ def generate_learning_plan(
                 resources = week_llm.get("resources", [])
                 if not resources:
                     resources = get_topic_resources(topic, ladder_level_num)
+                # 为B站视频生成 embed_url
+                resources = _enrich_video_embed(resources)
                 core_20 = week_llm.get("core_20_percent", "")
                 if not core_20 and topic_data:
                     core_20 = topic_data.get("core_20", "")
+                # 文档内容：优先 LLM 生成，回退到主题内容库
+                doc_content = week_llm.get("doc_content", "")
+                if not doc_content and topic_data:
+                    doc_content = topic_data.get("doc_content", "")
             else:
                 resources = []
                 core_20 = ""
+                doc_content = ""
 
             test_question = week_llm.get("test_question", "") if step_type == "test" else ""
             test_answer_hint = week_llm.get("test_answer_hint", "") if step_type == "test" else ""
@@ -312,6 +319,7 @@ def generate_learning_plan(
                 "title": title,
                 "content": content,
                 "resources": resources,
+                "doc_content": doc_content,
                 "core_20_percent": core_20,
                 "test_question": test_question,
                 "test_answer_hint": test_answer_hint,
@@ -575,6 +583,23 @@ def _llm_generate_content(topic, goal, level, total_weeks, ladder, focus_areas):
     return all_results
 
 
+def _enrich_video_embed(resources: list) -> list:
+    """为视频资源添加 embed_url，支持 APP 内嵌播放。"""
+    import re
+    enriched = []
+    for r in resources:
+        r = dict(r)  # copy
+        url = r.get("url", "")
+        rtype = r.get("type", "")
+        if rtype == "video":
+            # B站: https://www.bilibili.com/video/BV1xxxxx -> player embed
+            m = re.search(r'bilibili\.com/video/(BV[\w]+)', url)
+            if m:
+                r["embed_url"] = f"https://player.bilibili.com/player.html?bvid={m.group(1)}&high_quality=1&danmaku=0"
+        enriched.append(r)
+    return enriched
+
+
 def _llm_generate_batch(topic, goal_desc, goal_emphasis, level,
                          ladder_desc, focus_str, batch_start, batch_end, week_keys):
     """Generate learning content for a batch of weeks via LLM."""
@@ -620,21 +645,22 @@ def _llm_generate_batch(topic, goal_desc, goal_emphasis, level,
   "周数": {{
     "study_summary": "本周学习内容的中文摘要（200-300字，覆盖核心知识点）",
     "core_20_percent": "本周最核心的20%内容（1-2句话，能解决80%问题的关键知识）",
+    "doc_content": "## 标题\\n\\n本周核心知识文档的Markdown内容（300-500字，精炼但高质量）。\\n\\n### 要点1\\n- 要点说明\\n- 代码示例或关键概念\\n\\n### 要点2\\n- 要点说明\\n\\n> 重要提示或总结",
     "resources": [
-      {{
-        "type": "doc",
-        "title": "官方文档名称（必须是真实存在的文档链接）",
-        "url": "https://官方文档真实URL",
-        "platform": "平台名",
-        "level": "入门/进阶/高级",
-        "duration": "预计耗时",
-        "why": "为什么值得看"
-      }},
       {{
         "type": "video",
         "title": "B站视频标题（优先B站视频）",
         "url": "https://www.bilibili.com/video/BVxxxxx",
         "platform": "B站",
+        "level": "入门/进阶/高级",
+        "duration": "预计耗时",
+        "why": "为什么值得看"
+      }},
+      {{
+        "type": "article",
+        "title": "文章标题",
+        "url": "https://真实URL",
+        "platform": "平台名",
         "level": "入门/进阶/高级",
         "duration": "预计耗时",
         "why": "为什么值得看"
@@ -648,15 +674,14 @@ def _llm_generate_batch(topic, goal_desc, goal_emphasis, level,
 
 要求:
 1. 所有内容使用中文
-2. 每周精选3-5个资源，标注难度和推荐理由
-3. 资源类型要求:
-   - 每周必须至少有1个type为"doc"的文档资源（官方文档、技术规范、教程文档等）
-   - 视频资源优先推荐B站(bilibili.com)和微信视频号，其次是YouTube
-   - 文档资源优先官方文档（如 docs.python.org, react.dev 等）
-4. URL必须是真实存在的、可访问的链接，不要编造URL。只推荐你确定存在的资源。
-5. 每个资源标注: type(video/article/doc)、title、url、platform、level、duration、why
-6. 每周明确标注核心20%内容
-7. 内容难度按5级学习阶梯递进
+2. **doc_content 是核心**：每周必须生成一份精炼的 Markdown 知识文档（300-500字），直接在APP内渲染显示，不需要用户打开外部链接。内容包括：核心概念解释、关键代码示例、重要原理说明。用 ## 和 ### 组织层级，用 - 列表和 > 引用突出重点。
+3. 资源列表（resources）每周精选2-4个：
+   - 视频资源优先推荐B站(bilibili.com)，提供真实BV号URL
+   - 文章资源提供真实可访问的URL
+   - 不再需要doc类型资源（文档内容已内嵌到doc_content字段）
+4. URL必须是真实存在的、可访问的链接，不要编造URL
+5. 每周明确标注核心20%内容
+6. 内容难度按5级学习阶梯递进
 8. 实践任务要具体、可执行
 9. 紧扣学习目标: {goal_desc}
 

@@ -117,6 +117,7 @@ export default {
     passedMsg: '通过！得分：{score}/100',
     failedMsg: '得分：{score}/100 - 需要改进',
     reviewFailed: '评审失败：',
+    knowledgeDoc: '知识文档',
   },
   review: {
     title: 'AI 评审',

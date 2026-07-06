@@ -41,6 +41,8 @@ export const reminderApi = {
   toggle: (id) => api.put(`/reminders/${id}/toggle`),
   delete: (id) => api.delete(`/reminders/${id}`),
   test: (channel) => api.post(`/reminders/test/${channel}`),
+  getConfig: (channel) => api.get(`/notification-config/${channel}`),
+  saveConfig: (channel, data) => api.put(`/notification-config/${channel}`, data),
 }
 
 // Achievements
@@ -52,6 +54,7 @@ export const achievementApi = {
 export const configApi = {
   get: () => api.get('/llm-config'),
   update: (data) => api.put('/llm-config', data),
+  test: () => api.post('/llm-config/test'),
 }
 
 // Dashboard

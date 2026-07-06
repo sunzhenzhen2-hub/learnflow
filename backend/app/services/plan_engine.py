@@ -662,13 +662,16 @@ def _llm_generate_batch(topic, goal_desc, goal_emphasis, level,
 
 只返回JSON，不要其他文字。"""
 
+    headers = {"Content-Type": "application/json"}
+    if settings.LLM_API_KEY.startswith("tp-"):
+        headers["api-key"] = settings.LLM_API_KEY
+    else:
+        headers["Authorization"] = f"Bearer {settings.LLM_API_KEY}"
+
     try:
         response = httpx.post(
             f"{settings.LLM_API_BASE}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.LLM_API_KEY}",
-                "Content-Type": "application/json",
-            },
+            headers=headers,
             json={
                 "model": settings.LLM_MODEL,
                 "messages": [{"role": "user", "content": prompt}],

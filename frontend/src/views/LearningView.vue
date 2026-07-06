@@ -28,7 +28,7 @@
           <el-icon v-if="step.locked" color="#c0c4cc"><Lock /></el-icon>
           <el-icon v-else-if="step.status === 'completed'" color="#67c23a"><CircleCheckFilled /></el-icon>
           <el-icon v-else-if="step.status === 'in_progress'" color="#409eff"><Loading /></el-icon>
-          <el-icon v-else color="#e6a23c"><Circle /></el-icon>
+          <el-icon v-else color="#e6a23c"><CircleFilled /></el-icon>
         </div>
         <div class="step-content">
           <div class="step-title">
@@ -193,7 +193,7 @@ const weekSteps = computed(() =>
 )
 
 const formatDate = (d) => dayjs(d).format('MM/DD ddd')
-const typeTag = (t) => ({ study: '', project: 'success', deep_project: 'warning', output: 'danger', cheat_sheet: 'warning', test: 'info' }[t] || '')
+const typeTag = (t) => ({ study: 'info', project: 'success', deep_project: 'warning', output: 'danger', cheat_sheet: 'warning', test: 'info' }[t] || 'info')
 const typeLabel = (type) => t('learning.stepTypes.' + type) || type
 
 const resourceColor = (type) => ({ video: '#409eff', article: '#67c23a', doc: '#e6a23c' }[type] || '#909399')

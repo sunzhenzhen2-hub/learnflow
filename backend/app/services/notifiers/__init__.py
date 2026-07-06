@@ -67,13 +67,12 @@ def _send_dingtalk(title: str, body: str, **kwargs) -> Tuple[bool, str]:
 
 
 def _send_windows(title: str, body: str, **kwargs) -> Tuple[bool, str]:
-    """Send Windows toast notification."""
+    """Send desktop notification (Windows/Linux)."""
     try:
         from win11toast import toast
         toast(title, body, icon="LearnFlow")
         return True, "Windows notification sent"
     except ImportError:
-        # Fallback to PowerShell notification
         try:
             import subprocess
             ps_cmd = f'''
@@ -87,7 +86,11 @@ def _send_windows(title: str, body: str, **kwargs) -> Tuple[bool, str]:
             '''
             subprocess.run(["powershell", "-Command", ps_cmd], capture_output=True, timeout=10)
             return True, "Windows notification sent (PowerShell fallback)"
-        except Exception as e:
-            return False, f"Windows notification error: {str(e)[:200]}"
+        except Exception:
+            try:
+                subprocess.run(["notify-send", title, body, "--app-name", "LearnFlow"], capture_output=True, timeout=10)
+                return True, "Linux notification sent (notify-send)"
+            except Exception as e:
+                return False, f"Notification error: {str(e)[:200]}"
     except Exception as e:
         return False, f"Windows notification error: {str(e)[:200]}"

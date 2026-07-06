@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     # Windows toast notifications
     WINDOWS_NOTIFY_ENABLED: bool = True
 
+    # Auth / Security
+    SECRET_KEY: str = "learnflow-secret-key-change-in-production-2024"
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
 
 settings = Settings()
 

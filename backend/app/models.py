@@ -92,3 +92,16 @@ class Achievement(Base):
     unlocked_at = Column(DateTime, default=datetime.utcnow)
 
     plan = relationship("LearningPlan", back_populates="achievements")
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), unique=True, nullable=False, index=True)
+    hashed_password = Column(String(255), nullable=False)
+    is_active = Column(Boolean, default=True)
+    is_admin = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_login = Column(DateTime)
+    must_change_password = Column(Boolean, default=False)

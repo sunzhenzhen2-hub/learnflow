@@ -157,13 +157,16 @@ def _ai_review(step_title, step_content, user_output, step_type,
 }}
 """
 
+    headers = {"Content-Type": "application/json"}
+    if settings.LLM_API_KEY.startswith("tp-"):
+        headers["api-key"] = settings.LLM_API_KEY
+    else:
+        headers["Authorization"] = f"Bearer {settings.LLM_API_KEY}"
+
     try:
         response = httpx.post(
             f"{settings.LLM_API_BASE}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {settings.LLM_API_KEY}",
-                "Content-Type": "application/json",
-            },
+            headers=headers,
             json={
                 "model": settings.LLM_MODEL,
                 "messages": [{"role": "user", "content": prompt}],

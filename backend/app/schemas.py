@@ -154,3 +154,22 @@ class DashboardData(BaseModel):
     streak_days: int
     total_completed: int
     total_steps: int
+
+
+# --- Auth Schemas ---
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+    must_change_password: bool
+    username: str
+    is_admin: bool
+
+
+class TokenData(BaseModel):
+    username: Optional[str] = None
+    is_admin: Optional[bool] = False
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str

@@ -12,13 +12,13 @@ app = FastAPI(title="LearnFlow", version="0.1.0")
 # CORS for frontend dev server
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "*"],
+    allow_origins=["http://localhost:5173", "http://localhost:3000", "http://localhost:8080", "*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Include routers
+# Public routers (no authentication required)
 app.include_router(plans.router, prefix="/api/plans", tags=["plans"])
 app.include_router(steps.router, prefix="/api/steps", tags=["steps"])
 app.include_router(review.router, prefix="/api/review", tags=["review"])

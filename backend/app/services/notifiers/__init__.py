@@ -29,6 +29,8 @@ def send_notification(channel: str, title: str, body: str, **kwargs) -> Tuple[bo
         return _send_feishu(title, body, **kwargs)
     elif channel == "dingtalk":
         return _send_dingtalk(title, body, **kwargs)
+    elif channel == "wx_subscribe":
+        return _send_wx_subscribe(title, body, **kwargs)
     else:
         return False, f"Unknown channel: {channel}"
 
@@ -204,4 +206,57 @@ def _send_linux(title: str, body: str, **kwargs) -> Tuple[bool, str]:
             pass
 
     return False, "No notification daemon found. Install libnotify (notify-send) or terminal-notifier."
+
+
+def _send_wx_subscribe(title: str, body: str, **kwargs) -> Tuple[bool, str]:
+    """Send WeChat mini program subscription message.
+
+    Required kwargs:
+        openid: User's WeChat openid
+        template_id: Subscription message template ID
+    Optional kwargs:
+        topic: Learning topic name
+        step_title: Step title
+    """
+    import asyncio
+    from datetime import datetime
+
+    openid = kwargs.get("openid", "")
+    template_id = kwargs.get("template_id", "")
+
+    if not openid or not template_id:
+        return False, "wx_subscribe requires openid and template_id in channel_config"
+
+    try:
+        from ..wx_notify import send_subscribe_message
+
+        data = {
+            "thing1": {"value": title[:20]},
+            "thing2": {"value": body[:20]},
+            "time3": {"value": datetime.now().strftime("%Y-%m-%d %H:%M")},
+        }
+
+        # Run async function in sync context
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            # Already in an async context (e.g., FastAPI)
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                result = pool.submit(
+                    asyncio.run,
+                    send_subscribe_message(openid, template_id, data)
+                ).result(timeout=15)
+        else:
+            result = asyncio.run(send_subscribe_message(openid, template_id, data))
+
+        if result.get("errcode", -1) == 0:
+            return True, "WeChat subscription message sent"
+        return False, f"WeChat error: {result.get('errmsg', 'unknown')}"
+
+    except Exception as e:
+        return False, f"WeChat subscribe error: {str(e)[:200]}"
 

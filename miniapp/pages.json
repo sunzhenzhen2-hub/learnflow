@@ -1,0 +1,89 @@
+{
+  "pages": [
+    {
+      "path": "pages/dashboard/index",
+      "style": {
+        "navigationBarTitleText": "LearnFlow",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/learn/index",
+      "style": {
+        "navigationBarTitleText": "学习",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/wizard/index",
+      "style": {
+        "navigationBarTitleText": "新建学习计划"
+      }
+    },
+    {
+      "path": "pages/profile/index",
+      "style": {
+        "navigationBarTitleText": "我的",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/review/index",
+      "style": {
+        "navigationBarTitleText": "AI 评审"
+      }
+    },
+    {
+      "path": "pages/settings/index",
+      "style": {
+        "navigationBarTitleText": "设置"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "LearnFlow",
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "backgroundColor": "#F5F7FA",
+    "backgroundTextStyle": "dark",
+    "app-plus": {
+      "background": "#F5F7FA"
+    }
+  },
+  "tabBar": {
+    "color": "#999999",
+    "selectedColor": "#409EFF",
+    "borderStyle": "black",
+    "backgroundColor": "#FFFFFF",
+    "list": [
+      {
+        "pagePath": "pages/dashboard/index",
+        "text": "首页",
+        "iconPath": "static/tabs/home.png",
+        "selectedIconPath": "static/tabs/home-active.png"
+      },
+      {
+        "pagePath": "pages/learn/index",
+        "text": "学习",
+        "iconPath": "static/tabs/learn.png",
+        "selectedIconPath": "static/tabs/learn-active.png"
+      },
+      {
+        "pagePath": "pages/wizard/index",
+        "text": "新建",
+        "iconPath": "static/tabs/add.png",
+        "selectedIconPath": "static/tabs/add-active.png"
+      },
+      {
+        "pagePath": "pages/profile/index",
+        "text": "我的",
+        "iconPath": "static/tabs/profile.png",
+        "selectedIconPath": "static/tabs/profile-active.png"
+      }
+    ]
+  },
+  "easycom": {
+    "autoscan": true,
+    "custom": {}
+  }
+}

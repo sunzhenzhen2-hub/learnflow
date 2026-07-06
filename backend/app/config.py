@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     # DingTalk (via dws)
     DINGTALK_ENABLED: bool = False
 
+    # WeChat Mini Program
+    WX_APPID: str = ""
+    WX_SECRET: str = ""
+    WX_TEMPLATE_ID: str = ""  # Subscription message template ID
+
     # Windows toast notifications
     WINDOWS_NOTIFY_ENABLED: bool = True
 

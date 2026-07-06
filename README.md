@@ -219,11 +219,21 @@ learnflow/
 ```bash
 cd learnflow/backend
 
-# 安装依赖（国内用户建议加 -i https://pypi.tuna.tsinghua.edu.cn/simple）
+# 创建虚拟环境（推荐）
+python -m venv venv
+
+# 激活虚拟环境
+# Windows:
+venv\Scripts\activate
+# macOS / Linux:
+source venv/bin/activate
+
+# 安装依赖
 pip install -r requirements.txt
 
 # 配置 LLM API（可选，不配置则使用主题内容库回退）
-# 编辑 .env 文件：
+cp .env.example .env
+# 编辑 .env 文件填入你的 API 配置：
 # LLM_API_BASE=https://your-api-endpoint/v1
 # LLM_API_KEY=your-key
 # LLM_MODEL=your-model
@@ -256,6 +266,104 @@ cd backend && python -m uvicorn app.main:app --host 0.0.0.0 --port 8001
 
 构建后只需启动后端，访问 `http://localhost:8001` 即可使用完整应用。
 
+## 跨平台部署
+
+LearnFlow 支持 Windows、macOS 和 Linux 三大平台。核心依赖全部跨平台兼容，以下列出各平台的差异项。
+
+### 平台差异对照
+
+| 项目 | Windows | macOS | Linux |
+|---|---|---|---|
+| Python 依赖 | 全部通用 | 全部通用 | 全部通用 |
+| 桌面通知 | `win11toast`（可选）+ PowerShell 回退 | `osascript`（系统内置） | `notify-send`（需安装 libnotify） |
+| 飞书通知 | `lark-cli.cmd` | `lark-cli` | `lark-cli` |
+| 钉钉通知 | `dws.exe` | `dws` | `dws` |
+| 前台进程管理 | `python -m uvicorn ...` | `python -m uvicorn ...` | `python -m uvicorn ...` |
+
+### Windows 额外依赖
+
+```powershell
+# 桌面通知（可选，不安装则回退到 PowerShell 原生通知）
+pip install win11toast==0.9
+```
+
+### macOS 额外配置
+
+```bash
+# 桌面通知：系统内置 osascript 即可工作，无需额外安装
+# 如需更丰富的通知（可点击、可操作），可选安装 terminal-notifier：
+brew install terminal-notifier
+
+# 飞书/钉钉：确保对应 CLI 工具在 PATH 中，或在 .env 中指定路径
+# LARK_CLI_PATH=/usr/local/bin/lark-cli
+# DWS_CLI_PATH=/usr/local/bin/dws
+```
+
+### Linux 额外配置
+
+```bash
+# 桌面通知（大多数桌面发行版已预装 libnotify）
+# Debian/Ubuntu:
+sudo apt install libnotify-bin
+# Fedora/RHEL:
+sudo dnf install libnotify
+# Arch:
+sudo pacman -S libnotify
+
+# 无桌面环境（服务器）：桌面通知不可用，建议使用飞书/钉钉通知渠道
+
+# 飞书/钉钉：确保对应 CLI 工具在 PATH 中，或在 .env 中指定路径
+```
+
+### 环境变量配置
+
+复制 `backend/.env.example` 为 `backend/.env`，按注释填入配置：
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+关键配置项：
+
+| 变量 | 说明 | 必填 |
+|---|---|---|
+| `LLM_API_BASE` | OpenAI 兼容 API 地址 | 否（不填则使用预设内容） |
+| `LLM_API_KEY` | API 密钥 | 否 |
+| `LLM_MODEL` | 模型名称 | 否 |
+| `LARK_CLI_PATH` | 飞书 CLI 路径（覆盖默认搜索） | 否 |
+| `DWS_CLI_PATH` | 钉钉 CLI 路径（覆盖默认搜索） | 否 |
+
+### Docker 部署（可选）
+
+```dockerfile
+FROM python:3.12-slim
+WORKDIR /app
+
+# 安装 Node.js 用于构建前端
+RUN apt-get update && apt-get install -y curl && \
+    curl -fsSL https://deb.nodesource.com/setup_18.x | bash - && \
+    apt-get install -y nodejs && rm -rf /var/lib/apt/lists/*
+
+# 安装后端依赖
+COPY backend/requirements.txt backend/
+RUN pip install --no-cache-dir -r backend/requirements.txt
+
+# 构建前端
+COPY frontend/ frontend/
+RUN cd frontend && npm install && npm run build
+
+# 复制后端代码
+COPY backend/ backend/
+
+EXPOSE 8001
+CMD ["python", "-m", "uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+```
+
+```bash
+docker build -t learnflow .
+docker run -p 8001:8001 -v $(pwd)/data:/app/data learnflow
+```
+
 ## LLM 集成
 
 LearnFlow 使用 LLM 完成两个核心功能：
@@ -267,11 +375,16 @@ LearnFlow 使用 LLM 完成两个核心功能：
 
 ## 通知渠道
 
-| 渠道 | 实现方式 | 状态 |
-|---|---|---|
-| Windows Toast | `win11toast` 原生通知 | 默认启用 |
-| 飞书（Lark） | `lark-cli` CLI 工具 | 需配置 App ID/Secret |
-| 钉钉 | `dws` CLI 工具 | 需配置 App Key/Secret |
+| 渠道 | 实现方式 | 平台支持 | 状态 |
+|---|---|---|---|
+| 桌面通知（desktop） | 平台原生 API | Windows / macOS / Linux | 自动检测平台 |
+| Windows Toast | `win11toast` + PowerShell 回退 | Windows 10/11 | 需安装 win11toast（可选） |
+| macOS 通知 | `osascript`（内置） / `terminal-notifier`（可选） | macOS 10.15+ | 系统内置，无需安装 |
+| Linux 通知 | `notify-send`（libnotify） / `zenity`（回退） | 桌面 Linux | 需安装 libnotify-bin |
+| 飞书（Lark） | `lark-cli` CLI 工具 | 全平台 | 需配置 App ID/Secret |
+| 钉钉 | `dws` CLI 工具 | 全平台 | 需配置 App Key/Secret |
+
+桌面通知渠道名支持 `desktop`（推荐）和 `windows`（向后兼容）。系统会自动检测当前平台并使用对应的通知 API。
 
 ## 许可证
 

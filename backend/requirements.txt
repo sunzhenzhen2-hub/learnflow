@@ -6,4 +6,5 @@ pydantic-settings==2.1.0
 httpx==0.26.0
 apscheduler==3.10.4
 python-dotenv==1.0.0
-win11toast==0.9
+# Windows only: pip install win11toast==0.9
+# macOS/Linux: not needed (uses native notification APIs)

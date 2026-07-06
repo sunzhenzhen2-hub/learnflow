@@ -5,7 +5,7 @@ Learning Plan Engine - Skill 深度嵌入版
 import json
 import httpx
 from datetime import date, timedelta
-from ..config import settings
+from ..config import settings, effective_model
 from .topic_library import get_topic_content, get_topic_resources
 
 
@@ -695,7 +695,7 @@ def _llm_generate_batch(topic, goal_desc, goal_emphasis, level,
                 "Content-Type": "application/json",
             },
             json={
-                "model": settings.LLM_MODEL,
+                "model": effective_model(),
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.7,
                 "max_tokens": 8192,

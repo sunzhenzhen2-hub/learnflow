@@ -37,6 +37,39 @@
       </view>
     </view>
 
+    <!-- AI Model Configuration -->
+    <view class="section">
+      <text class="section-title">AI 模型配置</text>
+      <!-- Status indicator -->
+      <view class="llm-status" :class="{ configured: llmConfigured }">
+        <text class="llm-status-text">{{ llmConfigured ? '已配置 — ' + llmForm.model : '未配置' }}</text>
+      </view>
+      <!-- API Base -->
+      <view class="setting-item">
+        <text class="setting-label">API 地址</text>
+        <input class="setting-input" v-model="llmForm.api_base" placeholder="https://api.openai.com/v1" />
+      </view>
+      <!-- Model picker -->
+      <view class="setting-item">
+        <text class="setting-label">模型</text>
+        <picker :range="modelNames" @change="onModelPick">
+          <text class="model-pick-value">{{ llmForm.model || '选择模型' }}</text>
+        </picker>
+      </view>
+      <!-- Default model picker -->
+      <view class="setting-item">
+        <text class="setting-label">默认模型</text>
+        <picker :range="modelNames" @change="onDefaultModelPick">
+          <text class="model-pick-value">{{ llmForm.default_model || '同上方模型' }}</text>
+        </picker>
+      </view>
+      <!-- Actions -->
+      <view class="llm-actions">
+        <button class="btn-primary" size="mini" @click="saveLLMConfig" :loading="savingLLM">保存</button>
+        <button class="btn-outline" size="mini" @click="testLLMConfig" :loading="testingLLM" :disabled="!llmHasKey">测试</button>
+      </view>
+    </view>
+
     <!-- About -->
     <view class="section">
       <text class="section-title">关于</text>
@@ -50,14 +83,85 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { planApi, reminderApi, authApi } from '../../api/client'
+import { ref, computed, onMounted } from 'vue'
+import { planApi, reminderApi, authApi, configApi } from '../../api/client'
 
 const plans = ref([])
 const wxNotify = ref(false)
 const dailyReminder = ref(true)
 const reminderTime = ref('09:00')
 const wxTemplateId = 'TEMPLATE_ID_HERE'  // Replace with actual template ID from WeChat MP console
+
+// LLM Config state
+const llmForm = ref({ api_base: '', model: '', default_model: '' })
+const llmConfigured = ref(false)
+const llmHasKey = ref(false)
+const savingLLM = ref(false)
+const testingLLM = ref(false)
+const presetModels = ref([])
+
+const modelNames = computed(() => {
+  if (presetModels.value.length === 0) {
+    return ['gpt-4o-mini', 'gpt-4o', 'mimo-v2.5', 'deepseek-chat', 'qwen-turbo']
+  }
+  return presetModels.value.map(m => `${m.name} (${m.id})`)
+})
+
+function onModelPick(e) {
+  const idx = e.detail.value
+  if (presetModels.value.length > 0 && idx < presetModels.value.length) {
+    llmForm.value.model = presetModels.value[idx].id
+  }
+}
+
+function onDefaultModelPick(e) {
+  const idx = e.detail.value
+  if (presetModels.value.length > 0 && idx < presetModels.value.length) {
+    llmForm.value.default_model = presetModels.value[idx].id
+  }
+}
+
+async function loadLLMConfig() {
+  try {
+    const { data } = await configApi.get()
+    llmForm.value = { api_base: data.api_base, model: data.model, default_model: data.default_model || data.model }
+    llmConfigured.value = data.configured
+    llmHasKey.value = data.has_key
+  } catch (e) { console.error('Failed to load LLM config:', e) }
+}
+
+async function loadModels() {
+  try {
+    const { data } = await configApi.models()
+    presetModels.value = data.models || []
+  } catch (e) { console.error('Failed to load models:', e) }
+}
+
+async function saveLLMConfig() {
+  savingLLM.value = true
+  try {
+    await configApi.update({ ...llmForm.value, api_key: '' })
+    llmConfigured.value = true
+    llmHasKey.value = true
+    uni.showToast({ title: '已保存', icon: 'success' })
+  } catch (e) {
+    uni.showToast({ title: '保存失败', icon: 'none' })
+  } finally {
+    savingLLM.value = false
+  }
+}
+
+async function testLLMConfig() {
+  testingLLM.value = true
+  try {
+    const { data } = await configApi.test()
+    uni.showToast({ title: data.success ? '连接成功' : data.message, icon: 'none', duration: 3000 })
+  } catch (e) {
+    uni.showToast({ title: '测试失败', icon: 'none' })
+  } finally {
+    testingLLM.value = false
+  }
+}
 
 function goToLearn(planId) {
   uni.navigateTo({ url: `/pages/learn/index?planId=${planId}` })
@@ -138,6 +242,8 @@ onMounted(async () => {
   } catch (e) {
     console.error('Failed to load plans:', e)
   }
+  loadLLMConfig()
+  loadModels()
 })
 </script>
 
@@ -166,4 +272,26 @@ onMounted(async () => {
 .about-name { font-size: 30rpx; font-weight: 700; color: #303133; display: block; margin-bottom: 8rpx; }
 .about-desc { font-size: 24rpx; color: #909399; display: block; margin-top: 4rpx; }
 .empty { text-align: center; padding: 40rpx; color: #909399; font-size: 26rpx; }
+.llm-status {
+  padding: 16rpx 24rpx; border-radius: 12rpx 12rpx 0 0; background: #fef0f0;
+}
+.llm-status.configured { background: #f0f9eb; }
+.llm-status-text { font-size: 24rpx; color: #f56c6c; }
+.llm-status.configured .llm-status-text { color: #67c23a; }
+.setting-input {
+  font-size: 26rpx; color: #606266; text-align: right; flex: 1; margin-left: 20rpx;
+}
+.model-pick-value { font-size: 26rpx; color: #409eff; }
+.llm-actions {
+  display: flex; gap: 16rpx; padding: 16rpx 24rpx; background: #fff;
+  border-radius: 0 0 12rpx 12rpx;
+}
+.btn-primary {
+  background: #409eff; color: #fff; border-radius: 8rpx; font-size: 26rpx;
+  padding: 12rpx 32rpx; border: none;
+}
+.btn-outline {
+  background: #fff; color: #409eff; border: 1rpx solid #409eff;
+  border-radius: 8rpx; font-size: 26rpx; padding: 12rpx 32rpx;
+}
 </style>

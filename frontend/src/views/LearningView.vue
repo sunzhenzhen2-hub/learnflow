@@ -94,10 +94,25 @@
         <div class="core20-text">{{ selectedStep.core_20_percent }}</div>
       </div>
 
-      <!-- Learning Content -->
+      <!-- Learning Content (text summary) -->
       <div class="content-section" v-if="selectedStep.content">
         <h4>{{ $t('learning.learningContent') }}</h4>
         <div class="content-text">{{ selectedStep.content }}</div>
+      </div>
+
+      <!-- Knowledge Point Tabs (LLM synthesized) -->
+      <div class="knowledge-tabs-section" v-if="knowledgePoints.length">
+        <h4>{{ $t('learning.knowledgePoints') || "核心知识点" }}</h4>
+        <el-tabs v-model="activeTab" class="knowledge-tabs" tab-position="top">
+          <el-tab-pane
+            v-for="kp in knowledgePoints"
+            :key="kp.index"
+            :label="kp.title"
+            :name="String(kp.index)"
+          >
+            <div class="knowledge-body" v-html="renderMarkdown(kp.body)"></div>
+          </el-tab-pane>
+        </el-tabs>
       </div>
 
       <!-- Test Question -->
@@ -220,6 +235,49 @@ const submitting = ref(false)
 const weekSteps = computed(() =>
   steps.value.filter(s => s.week_num === currentWeek.value)
 )
+
+const activeTab = ref('0')
+
+// Simple markdown renderer (bolds, code blocks, quotes)
+const renderMarkdown = (text) => {
+  if (!text) return ''
+  return text
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+    .replace(/
+/g, '<br>')
+}
+
+// Parse doc_content into knowledge point tabs
+const knowledgePoints = computed(() => {
+  const doc = selectedStep.value?.doc_content
+  if (!doc) return []
+  const SEP = '---知识点分隔符---'
+  if (doc.includes(SEP)) {
+    return doc.split(SEP).map((section, idx) => {
+      const trimmed = section.trim()
+      const firstHash = trimmed.indexOf('## ')
+      let title = '知识点 ' + (idx + 1)
+      let body = trimmed
+      if (firstHash !== -1) {
+        const nextNewline = trimmed.indexOf('
+', firstHash)
+        if (nextNewline !== -1) {
+          title = trimmed.slice(firstHash + 3, nextNewline).trim()
+          body = trimmed.slice(nextNewline + 1).trim()
+        } else {
+          title = trimmed.slice(firstHash + 3).trim()
+          body = ''
+        }
+      }
+      return { title, body, index: idx }
+    })
+  }
+  // Fallback: treat whole doc as single tab
+  return doc.trim() ? [{ title: '知识内容', body: doc.trim(), index: 0 }] : []
+})
 
 const formatDate = (d) => dayjs(d).format('MM/DD ddd')
 const typeTag = (t) => ({ study: 'info', project: 'success', deep_project: 'warning', output: 'danger', cheat_sheet: 'warning', test: 'info' }[t] || 'info')
@@ -384,6 +442,35 @@ watch(currentWeek, () => { selectedStep.value = null })
 
 .content-section { background: #f9f9f9; padding: 16px; border-radius: 8px; margin-bottom: 16px; }
 .content-text { white-space: pre-wrap; line-height: 1.8; font-size: 14px; }
+
+.knowledge-tabs-section {
+  background: #f0f9ff;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  border: 1px solid #dcdfe6;
+  overflow: hidden;
+}
+.knowledge-tabs-section h4 { padding: 12px 16px 0; font-size: 15px; color: #303133; margin: 0; }
+.knowledge-tabs { margin: 0; }
+.knowledge-tabs :deep(.el-tabs__header) { margin: 0; background: #f5f7fa; }
+.knowledge-tabs :deep(.el-tabs__item) { font-size: 13px; }
+.knowledge-tabs :deep(.el-tabs__content) { padding: 16px; }
+.knowledge-body { font-size: 14px; line-height: 1.8; color: #303133; }
+.knowledge-body blockquote {
+  border-left: 3px solid #e6a23c;
+  background: #fff7e6;
+  padding: 8px 12px;
+  margin: 8px 0;
+  border-radius: 0 4px 4px 0;
+  color: #865a00;
+}
+.knowledge-body code {
+  background: #f0f0f0;
+  padding: 2px 5px;
+  border-radius: 3px;
+  font-size: 13px;
+  color: #e03e3e;
+}
 
 .test-section { background: #fdf6ec; padding: 16px; border-radius: 8px; margin-bottom: 16px; border-left: 3px solid #e6a23c; }
 .test-question { font-size: 14px; line-height: 1.8; color: #606266; white-space: pre-wrap; }

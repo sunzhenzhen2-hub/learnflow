@@ -38,7 +38,7 @@ class LearningStep(Base):
     resources = Column(JSON)  # 学习资源列表，每个资源可含 doc_content(Markdown) 和 embed_url(视频嵌入)
     doc_content = Column(Text)  # 内嵌文档 Markdown 内容（当 resources 中有 doc 类型时使用）
     core_20_percent = Column(Text)  # 二八法则：本周核心20%内容
-    test_question = Column(Text)  # 强制测试题目
+    test_questions = Column(JSON, nullable=True)  # 结构化测试题 JSON：[{"type":"choice"|"true_false"|"short", "question":"...","options":[...],"correct":"A","keywords":[...]}]
     test_answer_hint = Column(Text)  # 测试答案提示（用于AI评分参考）
     duration_minutes = Column(Integer, default=60)
     ladder_level = Column(Integer)  # 学习阶梯等级（1-5）

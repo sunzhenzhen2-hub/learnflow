@@ -41,13 +41,12 @@ def get_dashboard_data() -> dict:
             LearningStep.plan_id == active_plan.id,
             LearningStep.date >= today,
             LearningStep.date <= today + timedelta(days=7),
-        ).order_by(LearningStep.date).all()
+        ).order_by(LearningStep.date).limit(10).all()
 
         milestones = db.query(Milestone).filter(
             Milestone.plan_id == active_plan.id
         ).order_by(Milestone.week_num).all()
 
-        # 成就
         achievements = db.query(Achievement).filter(
             Achievement.plan_id == active_plan.id
         ).order_by(Achievement.unlocked_at.desc()).all()
@@ -109,6 +108,13 @@ def get_dashboard_data() -> dict:
 
 
 def _step_to_dict(step: LearningStep) -> dict:
+    # 确保字符串字段不包含裸的\n
+    def clean_str(s):
+        if s is None:
+            return None
+        # 保留正常的换行符，不做额外处理
+        return s
+
     return {
         "id": step.id,
         "plan_id": step.plan_id,
@@ -117,10 +123,14 @@ def _step_to_dict(step: LearningStep) -> dict:
         "date": step.date.isoformat(),
         "step_type": step.step_type,
         "title": step.title,
-        "content": step.content,
+        "content": clean_str(step.content),
         "resources": step.resources,
-        "test_question": step.test_question,
+        "test_questions": step.test_questions,
+        "doc_content": clean_str(step.doc_content),
+        "core_20_percent": clean_str(step.core_20_percent),
         "duration_minutes": step.duration_minutes,
+        "ladder_level": step.ladder_level,
+        "ladder_name": step.ladder_name,
         "status": step.status,
         "locked": step.locked,
         "output_content": step.output_content,

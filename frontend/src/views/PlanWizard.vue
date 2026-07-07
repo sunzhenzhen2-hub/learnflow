@@ -178,100 +178,105 @@ const createPlan = async () => {
 </script>
 
 <style scoped>
-.wizard { max-width: 600px; margin: 0 auto; }
+.wizard { 
+  max-width: 600px; 
+  margin: 0 auto; 
+  padding: 12px;
+}
 
 .wizard-step {
-  margin: 32px 0;
-  min-height: 300px;
+  margin: 24px 0;
+  min-height: 280px;
 }
 
 .wizard-step h2 {
-  font-size: 22px;
-  margin-bottom: 24px;
+  font-size: 20px;
+  margin-bottom: 20px;
   color: #303133;
-}
-
-.wizard-nav {
-  display: flex;
-  justify-content: center;
-  gap: 16px;
-  padding: 24px 0;
 }
 
 .level-cards {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-width: 400px;
-  margin: 0 auto;
 }
 
 .level-card {
-  padding: 20px 24px;
+  padding: 16px;
   border: 2px solid #dcdfe6;
   border-radius: 12px;
   cursor: pointer;
-  transition: all 0.2s;
-  text-align: center;
-}
-
-.level-card:hover {
-  border-color: #409eff;
-  background: #f5f7fa;
+  transition: all 0.3s;
 }
 
 .level-card.selected {
   border-color: #409eff;
   background: #ecf5ff;
-  box-shadow: 0 2px 12px rgba(64, 158, 255, 0.2);
 }
 
 .level-name {
-  font-size: 18px;
+  font-size: 16px;
   font-weight: 600;
   color: #303133;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .level-desc {
   font-size: 13px;
   color: #909399;
+  line-height: 1.5;
+}
+
+.wizard-nav {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px 0;
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  border-top: 1px solid #ebeef5;
+}
+
+.wizard-nav :deep(.el-button) {
+  min-height: 44px;
+  font-size: 15px;
+  flex: 1;
+  max-width: 160px;
 }
 
 @media (max-width: 480px) {
   .wizard {
-    max-width: 100%;
-    padding: 0 4px;
+    padding: 8px;
   }
-
-  .wizard-step {
-    margin: 20px 0;
-    min-height: 250px;
-  }
-
+  
   .wizard-step h2 {
     font-size: 18px;
     margin-bottom: 16px;
   }
-
-  .level-cards {
-    max-width: 100%;
-  }
-
+  
   .level-card {
-    padding: 16px;
+    padding: 14px;
   }
-
+  
   .level-name {
-    font-size: 16px;
+    font-size: 15px;
   }
-
+  
+  .level-desc {
+    font-size: 12px;
+  }
+  
   .wizard-nav {
-    padding: 16px 0;
+    padding: 16px 8px;
+    gap: 10px;
   }
-
-  .el-descriptions {
-    font-size: 13px;
+  
+  .wizard-nav :deep(.el-button) {
+    min-height: 48px;
+    font-size: 14px;
+    padding: 0 16px;
   }
 }
 </style>
+

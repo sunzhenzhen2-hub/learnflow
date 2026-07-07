@@ -99,6 +99,7 @@ const goToLearn = () => {
 }
 </script>
 
+
 <style scoped>
 .mobile-layout {
   min-height: 100vh;
@@ -111,6 +112,7 @@ const goToLearn = () => {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
+  padding-top: calc(12px + env(safe-area-inset-top));
   background: #fff;
   border-bottom: 1px solid #ebeef5;
   position: sticky;
@@ -119,13 +121,13 @@ const goToLearn = () => {
 }
 
 .logo {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   color: #409eff;
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   margin: 0;
 }
 
@@ -136,10 +138,10 @@ const goToLearn = () => {
 }
 
 .mobile-main {
-  padding: 16px;
-  min-height: calc(100vh - 120px);
-  padding-bottom: 80px;
-  background: #fff;
+  padding: 12px;
+  min-height: calc(100vh - 60px - env(safe-area-inset-bottom));
+  padding-bottom: calc(70px + env(safe-area-inset-bottom));
+  background: #f5f7fa;
 }
 
 .mobile-footer {
@@ -149,7 +151,8 @@ const goToLearn = () => {
   right: 0;
   background: #fff;
   border-top: 1px solid #ebeef5;
-  padding: 8px 0;
+  padding: 6px 0;
+  padding-bottom: env(safe-area-inset-bottom);
   z-index: 100;
 }
 
@@ -163,12 +166,18 @@ const goToLearn = () => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 4px 16px;
+  gap: 2px;
+  padding: 6px 12px;
   cursor: pointer;
   color: #909399;
-  font-size: 12px;
+  font-size: 11px;
   transition: color 0.2s;
+  border-radius: 8px;
+  min-width: 60px;
+}
+
+.nav-item:active {
+  background: #f0f0f0;
 }
 
 .nav-item.active {
@@ -176,6 +185,23 @@ const goToLearn = () => {
 }
 
 .nav-item .el-icon {
-  font-size: 20px;
+  font-size: 22px;
+}
+
+@media (max-width: 380px) {
+  .logo {
+    font-size: 16px;
+  }
+  
+  .nav-item {
+    padding: 4px 8px;
+    min-width: 50px;
+    font-size: 10px;
+  }
+  
+  .nav-item .el-icon {
+    font-size: 20px;
+  }
 }
 </style>
+

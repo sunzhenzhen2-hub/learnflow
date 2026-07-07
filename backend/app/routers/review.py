@@ -31,7 +31,6 @@ def review_output(step_id: int, db: Session = Depends(get_db)):
         ladder_name=step.ladder_name or "",
     )
 
-    # 保存评审结果（完整保存，含苏格拉底追问、费曼分析、速查表建议）
     step.ai_review_result = {
         "feedback": result["feedback"],
         "suggestions": result["suggestions"],
@@ -42,7 +41,6 @@ def review_output(step_id: int, db: Session = Depends(get_db)):
     }
     step.ai_score = result["score"]
 
-    # 通过评审后标记状态
     if result["passed"]:
         step.status = "review_passed"
 
@@ -74,3 +72,49 @@ def retry_output(step_id: int, output: StepOutputSubmit, db: Session = Depends(g
     step.status = "in_progress"
     db.commit()
     return {"ok": True, "message": "输出已更新，请重新提交评审。"}
+
+
+@router.post("/{step_id}/test-grade")
+def grade_test(step_id: int, body: dict, db: Session = Depends(get_db)):
+    from ..schemas import StepTestSubmit
+    from ..services.reviewer import grade_test_questions
+    import json
+
+    body["step_id"] = step_id
+    submit = StepTestSubmit(**body)
+    
+    step = db.query(LearningStep).filter(LearningStep.id == step_id).first()
+    if not step:
+        raise HTTPException(404, "not found")
+    
+    test_questions = step.test_questions or []
+    if not test_questions:
+        raise HTTPException(400, "no test questions")
+    
+    # Convert Pydantic objects to dicts for grade_test_questions
+    answers_dict = [{"question_index": a.question_index, "answer": a.answer} for a in submit.answers]
+    result = grade_test_questions(test_questions, answers_dict)
+    
+    step.ai_score = result["score"]
+    step.ai_review_result = {
+        "feedback": result["feedback"],
+        "suggestions": result["suggestions"],
+        "test_results": result["results"],
+    }
+    step.output_content = json.dumps(answers_dict, ensure_ascii=False)
+    
+    if result["passed"]:
+        step.status = "review_passed"
+    
+    db.commit()
+    
+    return {
+        "step_id": step_id,
+        "passed": result["passed"],
+        "score": result["score"],
+        "total": result["total"],
+        "correct": result["correct"],
+        "results": result["results"],
+        "feedback": result["feedback"],
+        "suggestions": result["suggestions"],
+    }

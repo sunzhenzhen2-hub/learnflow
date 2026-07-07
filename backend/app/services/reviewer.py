@@ -342,6 +342,144 @@ def _generate_cheat_sheet_suggestion(step_title: str, user_output: str) -> str:
     )
 
 
+def grade_test_questions(
+    test_questions: list,
+    answers: list,
+) -> dict:
+    """
+    对结构化测试题进行评分。
+    
+    Args:
+        test_questions: 测试题列表，[{"type":"choice"|"true_false"|"short","question":"...","options":[...],"correct":"A","keywords":[...]}]
+        answers: 用户答案列表，[{"question_index":0,"answer":"A"}]
+    
+    Returns:
+        {
+            "passed": bool,
+            "score": float,        # 0-100
+            "total": int,
+            "correct": int,
+            "results": [            # 每题详情
+                {
+                    "index": int,
+                    "type": str,
+                    "question": str,
+                    "user_answer": str,
+                    "correct_answer": str,
+                    "correct": bool,
+                    "score": float,   # 本题得分
+                }
+            ],
+            "feedback": str,
+            "suggestions": list[str],
+        }
+    """
+    if not test_questions or not answers:
+        return {
+            "passed": False,
+            "score": 0,
+            "total": len(test_questions) if test_questions else 0,
+            "correct": 0,
+            "results": [],
+            "feedback": "未找到测试题或答案。",
+            "suggestions": ["请确保已加载测试题目并填写答案。"],
+        }
+    
+    # 转换为 dict 方便查询
+    answer_map = {a["question_index"]: a["answer"] for a in answers}
+    
+    results = []
+    correct_count = 0
+    
+    for i, q in enumerate(test_questions):
+        qtype = q.get("type", "short")
+        user_ans = answer_map.get(i, "").strip()
+        correct_ans = ""
+        is_correct = False
+        q_score = 0
+        
+        if qtype == "choice":
+            correct_ans = q.get("correct", "").upper().strip()
+            is_correct = user_ans.upper() == correct_ans
+            q_score = 100 if is_correct else 0
+            
+        elif qtype == "true_false":
+            correct_ans = str(q.get("correct", "")).lower().strip()
+            is_correct = user_ans.lower() == correct_ans
+            q_score = 100 if is_correct else 0
+            
+        elif qtype == "short":
+            correct_ans = q.get("keywords", [])
+            # 关键词匹配：答到1个关键词得40%，2个得70%，3个以上得100%
+            if not user_ans:
+                q_score = 0
+            else:
+                kw_match = sum(1 for kw in correct_ans if kw in user_ans)
+                if kw_match == 0:
+                    q_score = 0
+                elif kw_match == 1:
+                    q_score = 40
+                elif kw_match == 2:
+                    q_score = 70
+                else:
+                    q_score = 100
+            is_correct = q_score >= 70  # 简答题 70 分以上算对
+            correct_ans = str(correct_ans)
+        
+        if is_correct:
+            correct_count += 1
+        
+        results.append({
+            "index": i,
+            "type": qtype,
+            "question": q.get("question", ""),
+            "user_answer": user_ans,
+            "correct_answer": correct_ans,
+            "correct": is_correct,
+            "score": q_score,
+        })
+    
+    total = len(test_questions)
+    score = round(sum(r["score"] for r in results) / total) if total > 0 else 0
+    passed = score >= 70
+    
+    # 生成反馈
+    correct_ans_list = [r["correct_answer"] for r in results]
+    
+    return {
+        "passed": passed,
+        "score": score,
+        "total": total,
+        "correct": correct_count,
+        "results": results,
+        "feedback": f"得分 {score}/100（答对 {correct_count}/{total} 题）{'\u2705 通过' if passed else '\u274c 未通过'}",
+        "suggestions": _build_test_suggestions(results, test_questions),
+    }
+
+
+def _build_test_suggestions(results: list, test_questions: list) -> list:
+    suggestions = []
+    for r in results:
+        if r["correct"]:
+            continue
+        qtype = r["type"]
+        q_idx = r["index"]
+        q = test_questions[q_idx] if q_idx < len(test_questions) else {}
+        
+        if qtype == "choice":
+            suggestions.append(f"第{q_idx+1}题选错了。正确答案：{r['correct_answer']}。请回顾相关知识点。")
+        elif qtype == "true_false":
+            suggestions.append(f"第{q_idx+1}题判断错误。正确答案：{r['correct_answer']}。")
+        elif qtype == "short":
+            kw = q.get("keywords", [])
+            suggestions.append(f"第{q_idx+1}题参考答案关键词：{kw}。请补充相关内容。")
+    
+    if not suggestions:
+        suggestions.append("全部答对，继续保持！")
+    
+    return suggestions[:3]
+
+
 def _similarity(text1: str, text2: str) -> float:
     """简单的词重叠相似度。"""
     # 中文按字符分割，英文按单词

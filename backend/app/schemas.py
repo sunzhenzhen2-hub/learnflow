@@ -52,7 +52,7 @@ class StepResponse(BaseModel):
     resources: Optional[list[dict]] = None
     doc_content: Optional[str] = None
     core_20_percent: Optional[str] = None
-    test_question: Optional[str] = None
+    test_questions: Optional[list[dict]] = None
     duration_minutes: int
     ladder_level: Optional[int] = None
     ladder_name: Optional[str] = None
@@ -82,6 +82,36 @@ class StepReviewResult(BaseModel):
     feynman_score: Optional[int] = None
     feynman_analysis: Optional[dict] = None
     cheat_sheet: Optional[str] = None
+
+
+# --- Test Question Schemas ---
+class TestQuestionItem(BaseModel):
+    type: str  # "choice" | "true_false" | "short"
+    question: str
+    options: Optional[list[str]] = None   # choice: ["A. xxx", "B. xxx", ...]
+    correct: Optional[str] = None         # choice: "A"/"B"/"C"/"D", true_false: "true"/"false"
+    keywords: Optional[list[str]] = None   # short: 评分关键词列表
+
+
+class TestQuestionSubmit(BaseModel):
+    question_index: int
+    answer: str   # choice: "A"/"B"/"C"/"D" | true_false: "true"/"false" | short: 文本
+
+
+class StepTestSubmit(BaseModel):
+    step_id: int
+    answers: list[TestQuestionSubmit]
+
+
+class StepTestResult(BaseModel):
+    step_id: int
+    passed: bool
+    score: float
+    total: int
+    correct: int
+    results: list[dict]
+    feedback: str
+    suggestions: list[str]
 
 
 # --- Milestone Schemas ---

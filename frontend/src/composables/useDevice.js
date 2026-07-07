@@ -1,11 +1,17 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 
-const MOBILE_BREAKPOINT = 768
-
+// 使用更严格的移动端检测
 const isMobile = ref(false)
 
 function checkDevice() {
-  isMobile.value = window.innerWidth < MOBILE_BREAKPOINT
+  const width = window.innerWidth
+  const ua = navigator.userAgent.toLowerCase()
+  
+  // 检测移动设备或小屏幕
+  const isMobileUA = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(ua)
+  const isSmallScreen = width < 768
+  
+  isMobile.value = isMobileUA || isSmallScreen
 }
 
 export function useDevice() {

@@ -32,6 +32,7 @@ export const stepApi = {
 export const reviewApi = {
   review: (stepId) => api.post(`/review/${stepId}/review`),
   retry: (stepId, content) => api.post(`/review/${stepId}/review-retry`, { content }),
+  gradeTest: (stepId, answers) => api.post(`/review/${stepId}/test-grade`, { step_id: stepId, answers }),
 }
 
 // Reminders

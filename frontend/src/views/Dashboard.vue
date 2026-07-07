@@ -191,6 +191,7 @@ onMounted(() => {
 })
 </script>
 
+
 <style scoped>
 .dashboard { padding: 0; }
 
@@ -202,10 +203,11 @@ onMounted(() => {
   min-height: 60vh;
   gap: 16px;
   text-align: center;
+  padding: 20px;
 }
 
-.empty-state h2 { font-size: 24px; color: #303133; }
-.empty-state p { color: #909399; }
+.empty-state h2 { font-size: 22px; color: #303133; }
+.empty-state p { color: #909399; font-size: 14px; }
 
 .card {
   background: #fff;
@@ -222,6 +224,7 @@ onMounted(() => {
   font-weight: 600;
   margin-bottom: 12px;
   color: #606266;
+  font-size: 14px;
 }
 
 .progress-header {
@@ -229,9 +232,11 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
-.progress-header h3 { font-size: 18px; }
+.progress-header h3 { font-size: 16px; }
 
 .stats-row {
   display: flex;
@@ -248,10 +253,10 @@ onMounted(() => {
   gap: 4px;
 }
 
-.stat-value { font-size: 20px; font-weight: 700; color: #409eff; }
-.stat-label { font-size: 12px; color: #909399; }
+.stat-value { font-size: 18px; font-weight: 700; color: #409eff; }
+.stat-label { font-size: 11px; color: #909399; }
 
-.today-content h4 { font-size: 16px; margin-bottom: 8px; }
+.today-content h4 { font-size: 15px; margin-bottom: 8px; line-height: 1.4; }
 
 .today-meta {
   display: flex;
@@ -259,21 +264,23 @@ onMounted(() => {
   gap: 8px;
   margin-bottom: 8px;
   color: #909399;
-  font-size: 14px;
+  font-size: 13px;
+  flex-wrap: wrap;
 }
 
-.today-desc { color: #606266; font-size: 14px; margin-bottom: 12px; line-height: 1.6; }
+.today-desc { color: #606266; font-size: 13px; margin-bottom: 12px; line-height: 1.6; }
 
 .ladder-badge { margin-left: auto; }
 
 .core20-highlight {
   background: linear-gradient(135deg, #fff7e6 0%, #fff3cd 100%);
-  padding: 8px 12px;
-  border-radius: 6px;
+  padding: 10px 12px;
+  border-radius: 8px;
   margin-bottom: 10px;
-  font-size: 13px;
+  font-size: 12px;
   color: #606266;
   border-left: 3px solid #e6a23c;
+  line-height: 1.6;
 }
 
 .step-list { display: flex; flex-direction: column; gap: 8px; }
@@ -281,75 +288,73 @@ onMounted(() => {
 .step-item {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px;
+  gap: 10px;
+  padding: 10px 8px;
   border-radius: 8px;
   background: #f9f9f9;
+  min-height: 44px;
 }
 
 .step-item.completed { opacity: 0.6; }
 
-.step-date { font-size: 12px; color: #909399; min-width: 60px; }
+.step-date { font-size: 11px; color: #909399; min-width: 50px; }
 
-.step-info { flex: 1; display: flex; align-items: center; gap: 8px; }
-.step-title { font-size: 14px; }
+.step-info { flex: 1; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.step-title { font-size: 13px; }
 
-.milestone-list { display: flex; flex-direction: column; gap: 12px; }
+.milestone-list { display: flex; flex-direction: column; gap: 10px; }
 
-.milestone-item { display: flex; align-items: flex-start; gap: 12px; }
-
-.milestone-info { display: flex; flex-direction: column; gap: 4px; }
-.milestone-title { font-weight: 600; font-size: 14px; }
-.milestone-desc { font-size: 12px; color: #909399; }
+.milestone-item { display: flex; align-items: flex-start; gap: 10px; }
 
 .achievement-list { display: flex; flex-direction: column; gap: 10px; }
-.achievement-item { display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 8px; background: #f9f9f9; }
-.achievement-item.rare { background: #ecf5ff; }
-.achievement-item.epic { background: #fdf6ec; }
-.achievement-item.legendary { background: #fef0f0; }
-.achievement-icon { color: #e6a23c; }
-.achievement-info { flex: 1; display: flex; flex-direction: column; gap: 2px; }
-.achievement-title { font-weight: 600; font-size: 14px; }
-.achievement-desc { font-size: 12px; color: #909399; }
+
+.achievement-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 8px;
+  background: #f9f9f9;
+}
+
+.achievement-icon { flex-shrink: 0; }
+.achievement-info { flex: 1; min-width: 0; }
+.achievement-title { font-size: 13px; font-weight: 600; display: block; }
+.achievement-desc { font-size: 11px; color: #909399; display: block; }
 
 @media (max-width: 480px) {
+  .card {
+    padding: 14px;
+    margin-bottom: 12px;
+    border-radius: 8px;
+  }
+  
+  .progress-header h3 { font-size: 15px; }
+  
   .stats-row {
     gap: 8px;
   }
-
-  .stat-value {
-    font-size: 18px;
-  }
-
-  .stat-label {
-    font-size: 11px;
-  }
-
-  .today-content h4 {
-    font-size: 15px;
-  }
-
+  
+  .stat-value { font-size: 16px; }
+  .stat-label { font-size: 10px; }
+  
   .step-item {
-    flex-wrap: wrap;
-    gap: 6px;
+    padding: 8px;
+    min-height: 40px;
   }
-
-  .step-date {
-    min-width: auto;
-    font-size: 11px;
-  }
-
-  .milestone-item {
-    gap: 8px;
-  }
-
+  
+  .step-date { min-width: 45px; font-size: 10px; }
+  .step-title { font-size: 12px; }
+  
   .achievement-item {
-    flex-wrap: wrap;
-    gap: 8px;
+    padding: 8px;
   }
-
-  .card {
-    padding: 12px;
+  
+  .empty-state {
+    min-height: 50vh;
   }
+  
+  .empty-state h2 { font-size: 20px; }
 }
 </style>
+

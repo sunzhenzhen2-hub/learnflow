@@ -55,7 +55,7 @@
       <div class="resources-section" v-if="selectedStep.resources?.length">
         <h4>{{ $t('learning.resources') }}</h4>
         <div class="resource-list">
-          <div v-for="(res, i) in selectedStep.resources" :key="i" class="resource-item">
+          <div v-for="(res, i) in selectedStep.resources.filter(r => !r.synthesized)" :key="i" class="resource-item">
             <!-- Embedded video player -->
             <template v-if="res.type === 'video' && res.embed_url">
               <div class="video-player-wrapper">
@@ -72,7 +72,7 @@
                 <span class="resource-meta">{{ res.platform }}{{ res.duration ? ' \u00b7 ' + res.duration : '' }}</span>
               </div>
             </template>
-            <!-- Non-video resources -->
+            <!-- Non-video / no-embed resources: inline display, no external links -->
             <template v-else>
               <el-icon :color="resourceColor(res.type)">
                 <VideoPlay v-if="res.type === 'video'" />
@@ -80,9 +80,9 @@
                 <Notebook v-else />
               </el-icon>
               <div class="resource-info">
-                <a v-if="res.url && res.type !== 'video'" :href="res.url" target="_blank" class="resource-link">{{ res.title }}</a>
-                <span v-else class="resource-link">{{ res.title }}</span>
-                <span class="resource-meta">{{ res.platform }}{{ res.duration ? ' \u00b7 ' + res.duration : '' }}</span>
+                <span class="resource-link">{{ res.title }}</span>
+                <span class="resource-meta">{{ res.platform }}{{ res.duration ? '· ' + res.duration : '' }}</span>
+                <span v-if="res.why" class="resource-why">{{ res.why }}</span>
               </div>
             </template>
           </div>
@@ -113,8 +113,18 @@
         <div class="test-question">{{ selectedStep.test_question }}</div>
       </div>
 
+      <!-- Test Taking (structured) -->
+      <div v-if="selectedStep.test_questions?.length" class="test-section-full">
+        <TestTaking
+          :step-id="selectedStep.id"
+          :questions="selectedStep.test_questions"
+          :test-title="selectedStep.title + ' - 测试' + (selectedStep.ladder_name ? ' [' + selectedStep.ladder_name + ']' : '')"
+          @test-passed="onTestPassed"
+        />
+      </div>
+
       <!-- Actions based on step status -->
-      <div class="actions" v-if="selectedStep.status !== 'completed'">
+      <div class="actions" v-if="selectedStep.status !== 'completed' && !selectedStep.test_questions?.length">
         <el-button
           v-if="selectedStep.status === 'available'"
           type="primary"
@@ -197,6 +207,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { planApi, stepApi, reviewApi } from '../api/client'
+import TestTaking from './TestTaking.vue'
 import { ElMessage } from 'element-plus'
 import dayjs from 'dayjs'
 
@@ -323,6 +334,11 @@ const loadSteps = async () => {
   }
 }
 
+const onTestPassed = async ({ score, stepId }) => {
+  ElMessage.success('测试通过！得分 ' + score + '/100')
+  await loadSteps()
+}
+
 const startStep = async () => {
   try {
     await stepApi.start(selectedStep.value.id)
@@ -431,6 +447,7 @@ watch(currentWeek, () => { selectedStep.value = null })
 .resource-link { font-size: 14px; color: #409eff; text-decoration: none; font-weight: 500; }
 .resource-link:hover { text-decoration: underline; }
 .resource-meta { font-size: 12px; color: #909399; margin-left: 8px; }
+.resource-why { display: block; font-size: 12px; color: #67c23a; margin-top: 2px; font-style: italic; }
 
 .content-section { background: #f9f9f9; padding: 16px; border-radius: 8px; margin-bottom: 16px; }
 .content-text { white-space: pre-wrap; line-height: 1.8; font-size: 14px; }

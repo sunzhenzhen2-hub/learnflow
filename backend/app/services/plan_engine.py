@@ -295,7 +295,11 @@ def generate_learning_plan(
                 if not resources:
                     resources = get_topic_resources(topic, ladder_level_num)
                 # 为B站视频生成 embed_url
-                resources = _enrich_video_embed(resources)
+                resources = _enrich_and_validate_video_embed(resources)
+                # 标记所有文章类资源为已提炼：前端不作为独立条目展示，内容合成为 doc_content
+                for r in resources:
+                    if r.get("type") == "article":
+                        r["synthesized"] = True
                 core_20 = week_llm.get("core_20_percent", "")
                 if not core_20 and topic_data:
                     core_20 = topic_data.get("core_20", "")
@@ -303,12 +307,21 @@ def generate_learning_plan(
                 doc_content = week_llm.get("doc_content", "")
                 if not doc_content and topic_data:
                     doc_content = topic_data.get("doc_content", "")
+                # 文章类资源的引用来源追加到 doc_content 末尾
+                article_resources = [r for r in resources if r.get("type") == "article"]
+                if article_resources:
+                    ref_lines = ["> **引用来源**"]
+                    for r in article_resources:
+                        ref_lines.append("> - [" + r.get("title", "") + "](" + r.get("url", "") + ")")
+                    ref_text = chr(10).join(ref_lines)
+                    if doc_content and ref_text not in doc_content:
+                        doc_content = doc_content.rstrip() + chr(10) + ref_text
             else:
                 resources = []
                 core_20 = ""
                 doc_content = ""
 
-            test_question = week_llm.get("test_question", "") if step_type == "test" else ""
+            test_questions = week_llm.get("test_questions", []) if step_type == "test" else []
             test_answer_hint = week_llm.get("test_answer_hint", "") if step_type == "test" else ""
 
             steps.append({
@@ -321,7 +334,7 @@ def generate_learning_plan(
                 "resources": resources,
                 "doc_content": doc_content,
                 "core_20_percent": core_20,
-                "test_question": test_question,
+                "test_questions": test_questions,
                 "test_answer_hint": test_answer_hint,
                 "duration_minutes": template["duration"],
                 "ladder_level": ladder_level["level"],
@@ -547,6 +560,7 @@ def _llm_generate_content(topic, goal, level, total_weeks, ladder, focus_areas):
     嵌入学习阶梯结构 + 二八法则核心标注 + 噪音筛选资源。
     """
     if not settings.LLM_API_KEY:
+        print("[LLM] No API key, skipping LLM generation")
         return {}
 
     goal_info = CORE_20_TEMPLATES.get(goal, CORE_20_TEMPLATES["systematic"])
@@ -583,21 +597,87 @@ def _llm_generate_content(topic, goal, level, total_weeks, ladder, focus_areas):
     return all_results
 
 
-def _enrich_video_embed(resources: list) -> list:
-    """为视频资源添加 embed_url，支持 APP 内嵌播放。"""
+def _enrich_and_validate_video_embed(resources: list) -> list:
+    """
+    为视频资源添加 embed_url，同时验证可播放性。
+    不可播放的视频（B站已删除/下线/私密）从列表中移除并记录警告。
+    遵循 skill 规范：所有加入计划视频必须可嵌入播放。
+    """
     import re
     enriched = []
+    validated = []
     for r in resources:
-        r = dict(r)  # copy
+        r = dict(r)
         url = r.get("url", "")
         rtype = r.get("type", "")
-        if rtype == "video":
-            # B站: https://www.bilibili.com/video/BV1xxxxx -> player embed
-            m = re.search(r'bilibili\.com/video/(BV[\w]+)', url)
-            if m:
-                r["embed_url"] = f"https://player.bilibili.com/player.html?bvid={m.group(1)}&high_quality=1&danmaku=0"
-        enriched.append(r)
+        
+        # 验证所有资源 URL
+        if url and not _validate_url(url):
+            print(f"[WARN] 资源 URL 不可访问，已跳过: {url}")
+            continue
+        
+        if rtype != "video":
+            enriched.append(r)
+            continue
+        m = re.search(r"bilibili\.com/video/(BV[\w]+)", url)
+        if not m:
+            enriched.append(r)
+            continue
+        bvid = m.group(1)
+        if not settings.LLM_API_KEY:
+            r["embed_url"] = f"https://player.bilibili.com/player.html?bvid={bvid}&high_quality=1&danmaku=0"
+            enriched.append(r)
+            continue
+        if _validate_bilibili_video(bvid):
+            r["embed_url"] = f"https://player.bilibili.com/player.html?bvid={bvid}&high_quality=1&danmaku=0"
+            enriched.append(r)
+        else:
+            print(f"[WARN] B站视频不可播放，已跳过: {url}")
     return enriched
+
+
+def _validate_bilibili_video(bvid: str) -> bool:
+    """通过 bilibili API 验证 BVID 是否存在且可播放。"""
+    try:
+        resp = httpx.get(
+            "https://api.bilibili.com/x/web-interface/view",
+            params={"bvid": bvid},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=5,
+        )
+        data = resp.json()
+        if data.get("code") == 0:
+            aid = data.get("data", {}).get("aid", 0)
+            return aid > 0
+        return False
+    except Exception as e:
+        return False
+
+
+def _validate_url(url: str) -> bool:
+    """验证 URL 是否可访问。跳过 Google Developers 等已知不可访问的域名。"""
+    # 已知在中国不可访问或超时的域名
+    blocked_domains = [
+        "developers.google.com",
+        "google.dev",
+        "cloud.google.com",
+        "medium.com",
+        "github.com",  # 可能需要代理
+        "stackoverflow.com",
+        "reddit.com",
+    ]
+    
+    url_lower = url.lower()
+    for domain in blocked_domains:
+        if domain in url_lower:
+            print(f"[WARN] 跳过不可访问的域名: {url}")
+            return False
+    
+    try:
+        resp = httpx.head(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=5, follow_redirects=True)
+        return resp.status_code < 400
+    except Exception:
+        return False
 
 
 def _llm_generate_batch(topic, goal_desc, goal_emphasis, level,
@@ -645,8 +725,9 @@ def _llm_generate_batch(topic, goal_desc, goal_emphasis, level,
   "周数": {{
     "study_summary": "本周学习内容的中文摘要（200-300字，覆盖核心知识点）",
     "core_20_percent": "本周最核心的20%内容（1-2句话，能解决80%问题的关键知识）",
-    "doc_content": "## 标题\\n\\n本周核心知识文档的Markdown内容（300-500字，精炼但高质量）。\\n\\n### 要点1\\n- 要点说明\\n- 代码示例或关键概念\\n\\n### 要点2\\n- 要点说明\\n\\n> 重要提示或总结",
+    "doc_content": "## 标题\\n本周核心知识文档（300-500字）。必须从本周文章资源和视频简介中提炼核心知识点，禁止直接引用URL或堆砌原文。必须包含：核心概念定义、关键代码示例、真实使用场景、>核心提示引用块。禁止出现外部链接。",
     "resources": [
+      # article 类型的 url 为 LLM 参考，LLM 须提炼其核心内容入 doc_content 并标注引用来源
       {{
         "type": "video",
         "title": "B站视频标题（优先B站视频）",
@@ -667,23 +748,25 @@ def _llm_generate_batch(topic, goal_desc, goal_emphasis, level,
       }}
     ],
     "project_task": "本周实践任务描述（中文，具体可执行）",
-    "test_question": "本周知识测试题（中文，1-2道简答题）",
-    "test_answer_hint": "测试答案要点提示"
+    "test_questions": [
+      {{"type": "choice", "question": "选择题：XXX？", "options": ["A. XXX", "B. XXX", "C. XXX", "D. XXX"], "correct": "A"}},
+      {{"type": "true_false", "question": "判断题：XXX", "correct": "true"}},
+      {{"type": "short", "question": "简答题：XXX", "keywords": ["关键词1", "关键词2"]}}
+    ]
   }}
 }}
 
 要求:
 1. 所有内容使用中文
-2. **doc_content 是核心**：每周必须生成一份精炼的 Markdown 知识文档（300-500字），直接在APP内渲染显示，不需要用户打开外部链接。内容包括：核心概念解释、关键代码示例、重要原理说明。用 ## 和 ### 组织层级，用 - 列表和 > 引用突出重点。
-3. 资源列表（resources）每周精选2-4个：
-   - 视频资源优先推荐B站(bilibili.com)，提供真实BV号URL
-   - 文章资源提供真实可访问的URL
-   - 不再需要doc类型资源（文档内容已内嵌到doc_content字段）
+2. test_questions 数组必须包含17道题：10道choice + 5道true_false + 2道short
+2. **doc_content 是核心**：必须从本周推荐的文章资源、视频简介中提炼核心知识点，生成300-500字的精炼Markdown文档。禁止直接引用URL、不做提炼堆砌原文。包含：核心概念定义、关键代码示例、真实使用场景、>核心提示引用块。资源URL不出现在doc_content中。
+3. resources 每周精选2-4个：视频优先B站（提供真实BV号），文章提供真实URL（内容已提炼入doc_content，无需doc类型资源）
 4. URL必须是真实存在的、可访问的链接，不要编造URL
 5. 每周明确标注核心20%内容
 6. 内容难度按5级学习阶梯递进
-8. 实践任务要具体、可执行
-9. 紧扣学习目标: {goal_desc}
+7. 实践任务要具体、可执行
+8. 紧扣学习目标: {goal_desc}
+9. test_questions 每周期必须生成：10道选择题 + 5道判断题 + 2道简答题（共17题），选择题/判断题必须提供正确答案，选择题/判断题必须提供正确答案
 
 只返回JSON，不要其他文字。"""
 
@@ -701,19 +784,31 @@ def _llm_generate_batch(topic, goal_desc, goal_emphasis, level,
                 "model": effective_model(),
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.7,
-                "max_tokens": 8192,
-                "response_format": {"type": "json_object"},
+                "max_tokens": 4096,
             },
-            timeout=120,
+            timeout=60,  # 增加超时时间
         )
         response.raise_for_status()
         result = response.json()
-        content = result["choices"][0]["message"]["content"]
-        batch_data = json.loads(content)
-        print(f"[LLM] batch {week_range}: {len(batch_data)} weeks generated")
-        return batch_data
+        msg = result["choices"][0]["message"]
+        # 优先使用 content 字段，如果为空则尝试 reasoning_content
+        raw_content = msg.get("content", "")
+        if not raw_content and msg.get("reasoning_content"):
+            raw_content = msg.get("reasoning_content", "")
+        
+        # 尝试提取 JSON
+        import re
+        m = re.search(r'\{.*\}', raw_content, re.DOTALL)
+        if m:
+            batch_data = json.loads(m.group())
+            print(f"[LLM] batch {week_range}: {len(batch_data)} weeks generated")
+            return batch_data
+        else:
+            print(f"[LLM] batch {week_range}: no JSON found, content: {raw_content[:100]}")
+            return None
+    except httpx.TimeoutException:
+        print(f"[LLM] batch {week_range} timeout")
+        return None
     except Exception as e:
-        import traceback
         print(f"[LLM] batch {week_range} failed: {e}")
-        traceback.print_exc()
         return None

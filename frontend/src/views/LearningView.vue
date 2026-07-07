@@ -242,12 +242,13 @@ const activeTab = ref('0')
 const renderMarkdown = (text) => {
   if (!text) return ''
   return text
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
-    .replace(/
-/g, '<br>')
+    .replace(/\n/g, '<br>')
 }
 
 // Parse doc_content into knowledge point tabs
@@ -262,8 +263,7 @@ const knowledgePoints = computed(() => {
       let title = '知识点 ' + (idx + 1)
       let body = trimmed
       if (firstHash !== -1) {
-        const nextNewline = trimmed.indexOf('
-', firstHash)
+        const nextNewline = trimmed.indexOf("\n", firstHash)
         if (nextNewline !== -1) {
           title = trimmed.slice(firstHash + 3, nextNewline).trim()
           body = trimmed.slice(nextNewline + 1).trim()

@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     LLM_API_BASE: str = "https://api.openai.com/v1"
     LLM_API_KEY: str = ""
     LLM_MODEL: str = "gpt-4o-mini"
+    DEFAULT_MODEL: str = ""
 
     # Feishu (via lark-cli)
     FEISHU_ENABLED: bool = False

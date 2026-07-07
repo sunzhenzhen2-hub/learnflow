@@ -4,6 +4,28 @@ from typing import Optional
 from pydantic import BaseModel
 
 
+# --- User Schemas ---
+class UserResponse(BaseModel):
+    id: int
+    username: str
+    is_admin: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class UserSessionResponse(BaseModel):
+    id: int
+    user_id: int
+    login_at: datetime
+    logout_at: Optional[datetime] = None
+    ip_address: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
 # --- Plan Schemas ---
 class PlanCreate(BaseModel):
     topic: str
@@ -166,12 +188,28 @@ class LLMConfigUpdate(BaseModel):
     api_base: str
     api_key: str
     model: str
+    default_model: Optional[str] = None
 
 
 class LLMConfigResponse(BaseModel):
     api_base: str
     model: str
+    default_model: Optional[str] = None
     has_key: bool
+    configured: bool = False
+
+
+class LLMModelInfo(BaseModel):
+    id: str
+    name: str
+    provider: str
+    description: str
+
+
+class LLMModelsResponse(BaseModel):
+    current_model: str
+    default_model: str
+    models: list[LLMModelInfo]
 
 
 # --- Dashboard Schema ---

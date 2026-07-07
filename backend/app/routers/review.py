@@ -3,18 +3,53 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import LearningStep
+from ..models import LearningStep, LearningPlan, User
 from ..schemas import StepReviewResult, StepOutputSubmit
+from ..dependencies import get_current_user_or_none
 
 router = APIRouter()
 
 
-@router.post("/{step_id}/review", response_model=StepReviewResult)
-def review_output(step_id: int, db: Session = Depends(get_db)):
-    """AI评审用户提交的学习输出/测试答案。"""
+def _get_or_create_guest_user(db: Session) -> User:
+    """获取或创建访客用户（用于向后兼容未登录用户）。"""
+    guest = db.query(User).filter(User.username == "guest").first()
+    if not guest:
+        from ..services.auth import get_password_hash
+        guest = User(
+            username="guest",
+            hashed_password=get_password_hash("guest"),
+            is_active=True,
+            is_admin=False,
+        )
+        db.add(guest)
+        db.flush()
+    return guest
+
+
+def _check_step_ownership(db: Session, step_id: int, user: User):
+    """检查步骤是否属于当前用户。"""
     step = db.query(LearningStep).filter(LearningStep.id == step_id).first()
     if not step:
         raise HTTPException(404, "步骤不存在")
+    plan = db.query(LearningPlan).filter(
+        LearningPlan.id == step.plan_id,
+        LearningPlan.user_id == user.id,
+    ).first()
+    if not plan:
+        raise HTTPException(403, "无权访问该步骤")
+    return step
+
+
+@router.post("/{step_id}/review", response_model=StepReviewResult)
+def review_output(
+    step_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_or_none),
+):
+    """AI评审用户提交的学习输出/测试答案（需属于当前用户）。"""
+    user = current_user or _get_or_create_guest_user(db)
+    step = _check_step_ownership(db, step_id, user)
+    
     if not step.output_content:
         raise HTTPException(400, "尚未提交输出")
 
@@ -60,11 +95,15 @@ def review_output(step_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{step_id}/review-retry")
-def retry_output(step_id: int, output: StepOutputSubmit, db: Session = Depends(get_db)):
-    """用户根据反馈修改后重新提交。"""
-    step = db.query(LearningStep).filter(LearningStep.id == step_id).first()
-    if not step:
-        raise HTTPException(404, "步骤不存在")
+def retry_output(
+    step_id: int,
+    output: StepOutputSubmit,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_or_none),
+):
+    """用户根据反馈修改后重新提交（需属于当前用户）。"""
+    user = current_user or _get_or_create_guest_user(db)
+    step = _check_step_ownership(db, step_id, user)
 
     step.output_content = output.content
     step.ai_review_result = None
@@ -75,17 +114,22 @@ def retry_output(step_id: int, output: StepOutputSubmit, db: Session = Depends(g
 
 
 @router.post("/{step_id}/test-grade")
-def grade_test(step_id: int, body: dict, db: Session = Depends(get_db)):
+def grade_test(
+    step_id: int,
+    body: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_or_none),
+):
+    """AI评分测试题（需属于当前用户）。"""
+    user = current_user or _get_or_create_guest_user(db)
+    step = _check_step_ownership(db, step_id, user)
+    
     from ..schemas import StepTestSubmit
     from ..services.reviewer import grade_test_questions
     import json
 
     body["step_id"] = step_id
     submit = StepTestSubmit(**body)
-    
-    step = db.query(LearningStep).filter(LearningStep.id == step_id).first()
-    if not step:
-        raise HTTPException(404, "not found")
     
     test_questions = step.test_questions or []
     if not test_questions:

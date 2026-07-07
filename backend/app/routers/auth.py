@@ -1,13 +1,13 @@
 """Authentication router - JWT login + WeChat mini program login + dev login."""
 import httpx
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from ..database import get_db
-from ..models import User
+from ..models import User, UserSession
 from ..schemas import Token, TokenData, ChangePasswordRequest
 from ..services.auth import verify_password, get_password_hash, create_access_token, decode_access_token, validate_password
 from ..config import settings
@@ -44,8 +44,29 @@ async def get_current_user_or_none(token: str = Depends(oauth2_scheme), db: Sess
         return None
 
 
+def _get_client_info(request: Request) -> tuple:
+    """提取客户端 IP 和 User-Agent。"""
+    ip = request.client.host if request.client else None
+    ua = request.headers.get("user-agent", "")[:500]
+    return ip, ua
+
+
+def _create_session(db: Session, user: User, token: str, ip: str, ua: str) -> UserSession:
+    """创建登录会话记录。"""
+    session = UserSession(
+        user_id=user.id,
+        login_at=datetime.utcnow(),
+        token=token[:200] if token else None,
+        ip_address=ip,
+        user_agent=ua,
+    )
+    db.add(session)
+    return session
+
+
 @router.post("/login", response_model=Token)
 async def login_for_access_token(
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db)
 ):
@@ -61,13 +82,18 @@ async def login_for_access_token(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User is inactive")
     
     user.last_login = datetime.utcnow()
-    db.commit()
     
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user.username, "is_admin": user.is_admin},
         expires_delta=access_token_expires
     )
+    
+    # 写入登录会话记录
+    ip, ua = _get_client_info(request)
+    _create_session(db, user, access_token, ip, ua)
+    
+    db.commit()
     
     return {
         "access_token": access_token,
@@ -76,6 +102,28 @@ async def login_for_access_token(
         "username": user.username,
         "is_admin": user.is_admin,
     }
+
+
+@router.post("/logout")
+async def logout(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """登出：标记当前会话为已登出。"""
+    ip, ua = _get_client_info(request)
+    
+    # 找到最近一条未登出的会话记录
+    session = db.query(UserSession).filter(
+        UserSession.user_id == current_user.id,
+        UserSession.logout_at.is_(None)
+    ).order_by(UserSession.login_at.desc()).first()
+    
+    if session:
+        session.logout_at = datetime.utcnow()
+        db.commit()
+    
+    return {"message": "Logged out successfully"}
 
 
 @router.post("/change-password")
@@ -117,6 +165,27 @@ async def read_users_me(current_user: User = Depends(get_current_user)):
         "created_at": current_user.created_at.isoformat(),
         "last_login": current_user.last_login.isoformat() if current_user.last_login else None,
     }
+
+
+@router.get("/sessions")
+async def get_user_sessions(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取当前用户的登录历史。"""
+    sessions = db.query(UserSession).filter(
+        UserSession.user_id == current_user.id
+    ).order_by(UserSession.login_at.desc()).limit(20).all()
+    
+    return [
+        {
+            "id": s.id,
+            "login_at": s.login_at.isoformat(),
+            "logout_at": s.logout_at.isoformat() if s.logout_at else None,
+            "ip_address": s.ip_address,
+        }
+        for s in sessions
+    ]
 
 
 class WxLoginRequest(BaseModel):

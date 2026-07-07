@@ -5,63 +5,84 @@ from ..database import SessionLocal
 from ..models import LearningPlan, LearningStep, Achievement
 
 
-def get_profile_data() -> dict:
-    """获取个人学习统计数据。"""
+def get_profile_data(user_id: int) -> dict:
+    """获取个人学习统计数据（按用户隔离）。"""
     db = SessionLocal()
     try:
-        # 总计划数
-        total_plans = db.query(LearningPlan).count()
+        # 总计划数（该用户）
+        total_plans = db.query(LearningPlan).filter(
+            LearningPlan.user_id == user_id
+        ).count()
 
         # 活跃计划
         active_plans = db.query(LearningPlan).filter(
+            LearningPlan.user_id == user_id,
             LearningPlan.status == "active"
         ).count()
 
         # 已完成计划
         completed_plans = db.query(LearningPlan).filter(
+            LearningPlan.user_id == user_id,
             LearningPlan.status == "completed"
         ).count()
 
+        # 获取该用户所有计划的ID列表
+        user_plan_ids = [p.id for p in db.query(LearningPlan.id).filter(
+            LearningPlan.user_id == user_id
+        ).all()]
+
         # 总步骤数
-        total_steps = db.query(LearningStep).count()
+        total_steps = db.query(LearningStep).filter(
+            LearningStep.plan_id.in_(user_plan_ids)
+        ).count() if user_plan_ids else 0
 
         # 已完成步骤数
         completed_steps = db.query(LearningStep).filter(
+            LearningStep.plan_id.in_(user_plan_ids),
             LearningStep.status == "completed"
-        ).count()
+        ).count() if user_plan_ids else 0
 
         # 学习总时长（分钟）- 只计算已完成的步骤
         total_minutes = db.query(
             func.sum(LearningStep.duration_minutes)
         ).filter(
+            LearningStep.plan_id.in_(user_plan_ids),
             LearningStep.status == "completed"
-        ).scalar() or 0
+        ).scalar() or 0 if user_plan_ids else 0
 
         # 总成就数
-        total_achievements = db.query(Achievement).count()
+        total_achievements = db.query(Achievement).filter(
+            Achievement.plan_id.in_(user_plan_ids)
+        ).count() if user_plan_ids else 0
 
         # 各稀有度成就数
         rarity_counts = {}
         for rarity in ["common", "rare", "epic", "legendary"]:
             count = db.query(Achievement).filter(
+                Achievement.plan_id.in_(user_plan_ids),
                 Achievement.rarity == rarity
-            ).count()
+            ).count() if user_plan_ids else 0
             if count > 0:
                 rarity_counts[rarity] = count
 
         # 最近完成的步骤（最近5个）
         recent_completed = db.query(LearningStep).filter(
+            LearningStep.plan_id.in_(user_plan_ids),
             LearningStep.status == "completed"
-        ).order_by(LearningStep.completed_at.desc()).limit(5).all()
+        ).order_by(LearningStep.completed_at.desc()).limit(5).all() if user_plan_ids else []
 
-        # 当前连续天数（所有计划中）
-        streak = _calculate_global_streak(db)
+        # 当前连续天数
+        streak = _calculate_user_streak(db, user_plan_ids)
 
         # 各计划进度
         plans_progress = []
-        plans = db.query(LearningPlan).order_by(LearningPlan.created_at.desc()).limit(5).all()
+        plans = db.query(LearningPlan).filter(
+            LearningPlan.user_id == user_id
+        ).order_by(LearningPlan.created_at.desc()).limit(5).all()
         for plan in plans:
-            plan_steps = db.query(LearningStep).filter(LearningStep.plan_id == plan.id).count()
+            plan_steps = db.query(LearningStep).filter(
+                LearningStep.plan_id == plan.id
+            ).count()
             plan_done = db.query(LearningStep).filter(
                 LearningStep.plan_id == plan.id,
                 LearningStep.status == "completed"
@@ -102,14 +123,17 @@ def get_profile_data() -> dict:
         db.close()
 
 
-def _calculate_global_streak(db) -> int:
-    """计算全局连续完成天数（跨所有计划）。"""
+def _calculate_user_streak(db, user_plan_ids: list) -> int:
+    """计算用户在所有计划中的全局连续完成天数。"""
+    if not user_plan_ids:
+        return 0
     today = date.today()
     streak = 0
     check_date = today
 
     while True:
         completed = db.query(LearningStep).filter(
+            LearningStep.plan_id.in_(user_plan_ids),
             LearningStep.date == check_date,
             LearningStep.status == "completed",
         ).first()

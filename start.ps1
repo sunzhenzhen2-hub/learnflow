@@ -1,70 +1,66 @@
-# LearnFlow 一键启动
+# LearnFlow 一键启动 (Windows)
 param(
     [string]$BackendPort = "8001",
     [string]$FrontendPort = "5173"
 )
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 $BASE = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-function Write-Status {
-    param($msg, $color = "White")
-    Write-Host "[LearnFlow]" $msg -ForegroundColor $color
+function Test-Port {
+    param($port)
+    try {
+        $null = (Invoke-WebRequest "http://localhost:$port/api/health" -TimeoutSec 2 -UseBasicParsing -ErrorAction SilentlyContinue)
+        return $true
+    } catch { return $false }
 }
+
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "  LearnFlow 启动" -ForegroundColor White
+Write-Host "========================================" -ForegroundColor Cyan
 
 # 1. 启动后端
-Write-Status "启动后端 (端口 $BackendPort)..." -Color Cyan
-$backendRunning = $false
-try {
-    $check = Invoke-WebRequest "http://localhost:$BackendPort/api/health" -TimeoutSec 2 -UseBasicParsing -ErrorAction SilentlyContinue
-    if ($check.StatusCode -eq 200) {
-        Write-Status "后端已在运行" -Color Yellow
-        $backendRunning = $true
-    }
-} catch {
-    $backendRunning = $false
-}
-
-if (-not $backendRunning) {
-    $backendJob = Start-Job -ScriptBlock {
-        param($bd, $bp, $fe)
-        cd $bd
-        $env:PYTHONPATH = $bd
-        python -m uvicorn app.main:app --reload --port $bp --host 0.0.0.0
-    } -ArgumentList "$BASE/backend", $BackendPort, $FrontendPort
-    Write-Status "后端 PID: $($backendJob.Id)" -Color Yellow
+Write-Host ""
+Write-Host "[1/2] 后端 (端口 $BackendPort)..." -NoNewline
+if (Test-Port $BackendPort) {
+    Write-Host " 已在运行" -ForegroundColor Yellow
+} else {
+    Write-Host " 启动中..." -NoNewline
+    $backendPath = Join-Path $BASE "backend"
+    Start-Process powershell -ArgumentList "-NoExit", "cd '$backendPath'; python -m uvicorn app.main:app --reload --port $BackendPort --host 0.0.0.0" -WindowStyle Minimized
     
-    # 等待后端就绪
+    # 等待就绪
     for ($i = 0; $i -lt 15; $i++) {
         Start-Sleep 2
-        try {
-            $check = Invoke-WebRequest "http://localhost:$BackendPort/api/health" -TimeoutSec 2 -UseBasicParsing -ErrorAction SilentlyContinue
-            if ($check.StatusCode -eq 200) {
-                Write-Status "后端就绪" -Color Green
-                break
-            }
-        } catch { }
+        if (Test-Port $BackendPort) {
+            Write-Host " 就绪" -ForegroundColor Green
+            break
+        }
         if ($i -eq 14) {
-            Write-Status "后端启动超时，请检查错误" -Color Red
-            exit 1
+            Write-Host " 超时" -ForegroundColor Red
         }
     }
 }
 
 # 2. 启动前端
-Write-Status "启动前端 (端口 $FrontendPort)..." -Color Cyan
+Write-Host "[2/2] 前端 (端口 $FrontendPort)..." -NoNewline
 $existing = Get-NetTCPConnection -LocalPort $FrontendPort -ErrorAction SilentlyContinue
-if (-not $existing) {
-    Start-Job -ScriptBlock {
-        cd 'C:\Users\Administrator\.qoderworkcn\workspace\mr7kcg38ce4xu7wf\learnflow\frontend'
-        npx vite --host --port 5173
-    } | Out-Null
-    Start-Sleep 5
+if ($existing) {
+    Write-Host " 已在运行" -ForegroundColor Yellow
 } else {
-    Write-Status "前端已在运行" -Color Yellow
+    Write-Host " 启动中..." -NoNewline
+    $frontendPath = Join-Path $BASE "frontend"
+    Start-Process powershell -ArgumentList "-NoExit", "cd '$frontendPath'; npx vite --host --port $FrontendPort" -WindowStyle Minimized
+    Start-Sleep 5
+    $check = Get-NetTCPConnection -LocalPort $FrontendPort -ErrorAction SilentlyContinue
+    if ($check) {
+        Write-Host " 就绪" -ForegroundColor Green
+    } else {
+        Write-Host " 启动失败，请手动检查" -ForegroundColor Red
+    }
 }
 
-# 3. 完成
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "  前端: http://localhost:$FrontendPort" -ForegroundColor White

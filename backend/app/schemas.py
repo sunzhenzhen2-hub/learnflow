@@ -73,6 +73,7 @@ class StepResponse(BaseModel):
     content: Optional[str]
     resources: Optional[list[dict]] = None
     core_20_percent: Optional[str] = None
+    doc_content: Optional[str] = None
     test_questions: Optional[list[dict]] = None
     duration_minutes: int
     ladder_level: Optional[int] = None

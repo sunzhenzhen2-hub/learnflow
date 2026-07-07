@@ -240,15 +240,22 @@ const activeTab = ref('0')
 
 // Simple markdown renderer (bolds, code blocks, quotes)
 const renderMarkdown = (text) => {
-  if (!text) return ''
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
-    .replace(/\n/g, '<br>')
+  if (!text) return ""
+  let html = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+  html = html.replace(/```mermaid([\s\S]*?)```/g, '<pre class="mermaid">$1</pre>')
+  html = html.replace(/```([\s\S]*?)```/g, "<pre class='code-block'><code>$1</code></pre>")
+  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+  html = html.replace(/`([^`]+)`/g, "<code>$1</code>")
+  html = html.replace(/^> (.+)$/gm, "<blockquote>$1</blockquote>")
+  html = html.replace(/^### (.+)$/gm, "<h4>$1</h4>")
+  html = html.replace(/^## (.+)$/gm, "<h3>$1</h3>")
+  html = html.replace(/^- (.+)$/gm, "<li>$1</li>")
+  html = html.replace(/\n\n/g, "</p><p>")
+  html = html.replace(/\n/g, "<br>")
+  return "<p>" + html + "</p>"
 }
 
 // Parse doc_content into knowledge point tabs
@@ -566,3 +573,4 @@ watch(currentWeek, () => { selectedStep.value = null })
   }
 }
 </style>
+

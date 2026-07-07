@@ -719,7 +719,7 @@ def _llm_generate_batch(topic, goal_desc, goal_emphasis, level,
   "周数": {{
     "study_summary": "本周学习内容的中文摘要（200-300字，覆盖核心知识点）",
     "core_20_percent": "本周最核心的20%内容（1-2句话，能解决80%问题的关键知识）",
-        "doc_content": "## 知识点一：核心概念定义\n## 知识点二：关键原理\n## 知识点三：代码示例\n## 知识点四：使用场景\n---知识点分隔符---（各知识点用此分隔符隔开，每个知识点以 ## 知识点N 开头，至少4个知识点）"
+        "doc_content": "## 知识点一：核心概念\n【概念定义】详细解释（200-400字）：定义、原理、边界条件。\n【关键要点】- 要点1\n- 要点2\n- 要点3\n【Mermaid图表】（如适用）\n【真实案例】具体应用场景\n【常见误区】容易犯的错误\n---知识点分隔符---"
     "resources": [
       # article 类型的 url 为 LLM 参考，LLM 须提炼其核心内容入 doc_content 并标注引用来源
       {{
@@ -753,7 +753,7 @@ def _llm_generate_batch(topic, goal_desc, goal_emphasis, level,
 要求:
 1. 所有内容使用中文
 2. test_questions 数组必须包含22道题：10道choice + 10道true_false + 2道short
-3. **doc_content 是核心**：必须从本周推荐的文章资源和视频简介中提炼核心知识点，生成精炼Markdown文档。用"---知识点分隔符---"将各知识点隔开，每个知识点以"## 知识点N"开头。必须包含：核心概念定义、关键代码示例、真实使用场景、>核心提示引用块。资源URL不出现在doc_content中。
+3. **doc_content 是核心**：生成详细的课程级知识点文档。用"---知识点分隔符---"将各知识点隔开，每个知识点包含：概念定义（200-400字）、关键要点列表、Mermaid图表（如适用）、真实案例、常见误区。至少5个知识点。资源URL不出现在doc_content中。
 4. resources 每周精选2-4个：视频优先B站（提供真实BV号），文章提供真实URL（内容已提炼入doc_content，无需doc类型资源）
 5. URL必须是真实存在的、可访问的链接，不要编造URL
 6. 每周明确标注核心20%内容

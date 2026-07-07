@@ -5,7 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
 from .database import init_db
-from .routers import plans, steps, review, reminders, config, achievements, profile, auth
+from .routers import plans, steps, review, reminders, config, achievements, profile
 
 app = FastAPI(title="LearnFlow", version="0.1.0")
 
@@ -26,7 +26,6 @@ app.include_router(reminders.router, prefix="/api/reminders", tags=["reminders"]
 app.include_router(config.router, prefix="/api", tags=["config"])
 app.include_router(achievements.router, prefix="/api/achievements", tags=["achievements"])
 app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
-app.include_router(auth.router, prefix="/api")
 
 
 @app.on_event("startup")

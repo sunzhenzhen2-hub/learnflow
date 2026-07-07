@@ -5,7 +5,7 @@ Learning Plan Engine - Skill 深度嵌入版
 import json
 import httpx
 from datetime import date, timedelta
-from ..config import settings, effective_model
+from ..config import settings
 from .topic_library import get_topic_content, get_topic_resources
 
 
@@ -294,20 +294,16 @@ def generate_learning_plan(
                 resources = week_llm.get("resources", [])
                 if not resources:
                     resources = get_topic_resources(topic, ladder_level_num)
-                # 为B站视频生成 embed_url
                 resources = _enrich_and_validate_video_embed(resources)
-                # 标记所有文章类资源为已提炼：前端不作为独立条目展示，内容合成为 doc_content
                 for r in resources:
                     if r.get("type") == "article":
                         r["synthesized"] = True
                 core_20 = week_llm.get("core_20_percent", "")
                 if not core_20 and topic_data:
                     core_20 = topic_data.get("core_20", "")
-                # 文档内容：优先 LLM 生成，回退到主题内容库
                 doc_content = week_llm.get("doc_content", "")
                 if not doc_content and topic_data:
                     doc_content = topic_data.get("doc_content", "")
-                # 文章类资源的引用来源追加到 doc_content 末尾
                 article_resources = [r for r in resources if r.get("type") == "article"]
                 if article_resources:
                     ref_lines = ["> **引用来源**"]
@@ -319,7 +315,6 @@ def generate_learning_plan(
             else:
                 resources = []
                 core_20 = ""
-                doc_content = ""
 
             test_questions = week_llm.get("test_questions", []) if step_type == "test" else []
             test_answer_hint = week_llm.get("test_answer_hint", "") if step_type == "test" else ""
@@ -332,7 +327,6 @@ def generate_learning_plan(
                 "title": title,
                 "content": content,
                 "resources": resources,
-                "doc_content": doc_content,
                 "core_20_percent": core_20,
                 "test_questions": test_questions,
                 "test_answer_hint": test_answer_hint,
@@ -729,19 +723,19 @@ def _llm_generate_batch(topic, goal_desc, goal_emphasis, level,
     "resources": [
       # article 类型的 url 为 LLM 参考，LLM 须提炼其核心内容入 doc_content 并标注引用来源
       {{
-        "type": "video",
-        "title": "B站视频标题（优先B站视频）",
-        "url": "https://www.bilibili.com/video/BVxxxxx",
-        "platform": "B站",
+        "type": "doc",
+        "title": "官方文档名称（必须是真实存在的文档链接）",
+        "url": "https://官方文档真实URL",
+        "platform": "平台名",
         "level": "入门/进阶/高级",
         "duration": "预计耗时",
         "why": "为什么值得看"
       }},
       {{
-        "type": "article",
-        "title": "文章标题",
-        "url": "https://真实URL",
-        "platform": "平台名",
+        "type": "video",
+        "title": "B站视频标题（优先B站视频）",
+        "url": "https://www.bilibili.com/video/BVxxxxx",
+        "platform": "B站",
         "level": "入门/进阶/高级",
         "duration": "预计耗时",
         "why": "为什么值得看"
@@ -759,14 +753,14 @@ def _llm_generate_batch(topic, goal_desc, goal_emphasis, level,
 要求:
 1. 所有内容使用中文
 2. test_questions 数组必须包含17道题：10道choice + 5道true_false + 2道short
-2. **doc_content 是核心**：必须从本周推荐的文章资源、视频简介中提炼核心知识点，生成300-500字的精炼Markdown文档。禁止直接引用URL、不做提炼堆砌原文。包含：核心概念定义、关键代码示例、真实使用场景、>核心提示引用块。资源URL不出现在doc_content中。
-3. resources 每周精选2-4个：视频优先B站（提供真实BV号），文章提供真实URL（内容已提炼入doc_content，无需doc类型资源）
-4. URL必须是真实存在的、可访问的链接，不要编造URL
-5. 每周明确标注核心20%内容
-6. 内容难度按5级学习阶梯递进
-7. 实践任务要具体、可执行
-8. 紧扣学习目标: {goal_desc}
-9. test_questions 每周期必须生成：10道选择题 + 5道判断题 + 2道简答题（共17题），选择题/判断题必须提供正确答案，选择题/判断题必须提供正确答案
+3. **doc_content 是核心**：必须从本周推荐的文章资源、视频简介中提炼核心知识点，生成300-500字的精炼Markdown文档。禁止直接引用URL、不做提炼堆砌原文。包含：核心概念定义、关键代码示例、真实使用场景、>核心提示引用块。资源URL不出现在doc_content中。
+4. resources 每周精选2-4个：视频优先B站（提供真实BV号），文章提供真实URL（内容已提炼入doc_content，无需doc类型资源）
+5. URL必须是真实存在的、可访问的链接，不要编造URL
+6. 每周明确标注核心20%内容
+7. 内容难度按5级学习阶梯递进
+8. 实践任务要具体、可执行
+9. 紧扣学习目标: {goal_desc}
+10. test_questions 每周期必须生成：10道选择题 + 5道判断题 + 2道简答题（共17题），选择题/判断题必须提供正确答案
 
 只返回JSON，不要其他文字。"""
 
@@ -781,7 +775,7 @@ def _llm_generate_batch(topic, goal_desc, goal_emphasis, level,
             f"{settings.LLM_API_BASE}/chat/completions",
             headers=headers,
             json={
-                "model": effective_model(),
+                "model": settings.LLM_MODEL,
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": 0.7,
                 "max_tokens": 4096,

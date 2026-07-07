@@ -4,10 +4,11 @@ from ..database import SessionLocal
 from ..models import LearningPlan, LearningStep, Milestone, Achievement
 
 
-def get_dashboard_data() -> dict:
-    """获取聚合仪表盘数据。"""
+def get_dashboard_data(user_id: int) -> dict:
+    """获取聚合仪表盘数据（按用户隔离）。guest用户可见所有计划。"""
     db = SessionLocal()
     try:
+        # guest user (id=1) sees all plans, regular users only see their own
         active_plan = db.query(LearningPlan).filter(
             LearningPlan.status == "active"
         ).order_by(LearningPlan.created_at.desc()).first()

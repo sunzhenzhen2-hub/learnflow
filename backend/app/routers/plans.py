@@ -4,15 +4,44 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import LearningPlan, LearningStep, Milestone
+from ..models import LearningPlan, LearningStep, Milestone, User
 from ..schemas import PlanCreate, PlanResponse, PlanWizardInput, StepResponse, MilestoneResponse
+from ..dependencies import get_current_user_or_none
 
 router = APIRouter()
 
 
+def _get_or_create_guest_user(db: Session) -> User:
+    """获取或创建访客用户（用于向后兼容未登录用户）。"""
+    guest = db.query(User).filter(User.username == "guest").first()
+    if not guest:
+        from ..services.auth import get_password_hash
+        guest = User(
+            username="guest",
+            hashed_password=get_password_hash("guest"),
+            is_active=True,
+            is_admin=False,
+        )
+        db.add(guest)
+        db.flush()
+    return guest
+
+
 @router.get("/", response_model=list[PlanResponse])
-def list_plans(db: Session = Depends(get_db)):
-    plans = db.query(LearningPlan).order_by(LearningPlan.created_at.desc()).all()
+def list_plans(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_or_none),
+):
+    """获取当前用户的计划列表。"""
+    user = current_user or _get_or_create_guest_user(db)
+    # Guest user sees all plans (no user_id filter)
+    is_guest = (user.username == "guest") if user else True
+    if is_guest:
+        plans = db.query(LearningPlan).order_by(LearningPlan.created_at.desc()).all()
+    else:
+        plans = db.query(LearningPlan).filter(
+            LearningPlan.user_id == user.id
+        ).order_by(LearningPlan.created_at.desc()).all()
     result = []
     for p in plans:
         total = db.query(LearningStep).filter(LearningStep.plan_id == p.id).count()
@@ -27,8 +56,14 @@ def list_plans(db: Session = Depends(get_db)):
 
 
 @router.post("/", response_model=PlanResponse)
-def create_plan(plan: PlanCreate, db: Session = Depends(get_db)):
-    db_plan = LearningPlan(**plan.model_dump())
+def create_plan(
+    plan: PlanCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_or_none),
+):
+    """创建学习计划，自动关联当前用户。"""
+    user = current_user or _get_or_create_guest_user(db)
+    db_plan = LearningPlan(user_id=user.id, **plan.model_dump())
     db.add(db_plan)
     db.commit()
     db.refresh(db_plan)
@@ -36,12 +71,19 @@ def create_plan(plan: PlanCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/wizard", response_model=PlanResponse)
-def wizard_create_plan(wizard: PlanWizardInput, db: Session = Depends(get_db)):
+def wizard_create_plan(
+    wizard: PlanWizardInput,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_or_none),
+):
     """Wizard-style plan creation: generates full plan from user inputs."""
     from ..services.plan_engine import generate_learning_plan
 
+    user = current_user or _get_or_create_guest_user(db)
+
     # Create the plan
     db_plan = LearningPlan(
+        user_id=user.id,
         topic=wizard.topic,
         goal=wizard.goal,
         current_level=wizard.current_level,
@@ -103,8 +145,21 @@ def wizard_create_plan(wizard: PlanWizardInput, db: Session = Depends(get_db)):
 
 
 @router.get("/{plan_id}", response_model=PlanResponse)
-def get_plan(plan_id: int, db: Session = Depends(get_db)):
-    plan = db.query(LearningPlan).filter(LearningPlan.id == plan_id).first()
+def get_plan(
+    plan_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_or_none),
+):
+    """获取指定计划（guest用户可见所有计划）。"""
+    user = current_user or _get_or_create_guest_user(db)
+    is_guest = (user.username == "guest") if user else True
+    if is_guest:
+        plan = db.query(LearningPlan).filter(LearningPlan.id == plan_id).first()
+    else:
+        plan = db.query(LearningPlan).filter(
+            LearningPlan.id == plan_id,
+            LearningPlan.user_id == user.id,
+        ).first()
     if not plan:
         raise HTTPException(404, "Plan not found")
     total = db.query(LearningStep).filter(LearningStep.plan_id == plan_id).count()
@@ -118,7 +173,24 @@ def get_plan(plan_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{plan_id}/steps", response_model=list[StepResponse])
-def get_plan_steps(plan_id: int, week: int = None, db: Session = Depends(get_db)):
+def get_plan_steps(
+    plan_id: int,
+    week: int = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_or_none),
+):
+    """获取指定计划的步骤列表（guest用户可见所有计划）。"""
+    user = current_user or _get_or_create_guest_user(db)
+    is_guest = (user.username == "guest") if user else True
+    if is_guest:
+        plan = db.query(LearningPlan).filter(LearningPlan.id == plan_id).first()
+    else:
+        plan = db.query(LearningPlan).filter(
+            LearningPlan.id == plan_id,
+            LearningPlan.user_id == user.id,
+        ).first()
+    if not plan:
+        raise HTTPException(404, "Plan not found")
     q = db.query(LearningStep).filter(LearningStep.plan_id == plan_id)
     if week:
         q = q.filter(LearningStep.week_num == week)
@@ -126,13 +198,37 @@ def get_plan_steps(plan_id: int, week: int = None, db: Session = Depends(get_db)
 
 
 @router.get("/{plan_id}/milestones", response_model=list[MilestoneResponse])
-def get_plan_milestones(plan_id: int, db: Session = Depends(get_db)):
+def get_plan_milestones(
+    plan_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_or_none),
+):
+    """获取指定计划的里程碑（需属于当前用户）。"""
+    user = current_user or _get_or_create_guest_user(db)
+    plan = db.query(LearningPlan).filter(
+        LearningPlan.id == plan_id,
+        LearningPlan.user_id == user.id,
+    ).first()
+    if not plan:
+        raise HTTPException(404, "Plan not found")
     return db.query(Milestone).filter(Milestone.plan_id == plan_id).order_by(Milestone.week_num).all()
 
 
 @router.delete("/{plan_id}")
-def delete_plan(plan_id: int, db: Session = Depends(get_db)):
-    plan = db.query(LearningPlan).filter(LearningPlan.id == plan_id).first()
+def delete_plan(
+    plan_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_or_none),
+):
+    """删除指定计划（guest用户不可删除）。"""
+    user = current_user or _get_or_create_guest_user(db)
+    is_guest = (user.username == "guest") if user else True
+    if is_guest:
+        raise HTTPException(403, "访客用户无法删除计划")
+    plan = db.query(LearningPlan).filter(
+        LearningPlan.id == plan_id,
+        LearningPlan.user_id == user.id,
+    ).first()
     if not plan:
         raise HTTPException(404, "Plan not found")
     db.delete(plan)

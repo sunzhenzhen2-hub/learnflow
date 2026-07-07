@@ -4,23 +4,80 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import LearningStep, Achievement, Milestone
+from ..models import LearningStep, LearningPlan, Achievement, Milestone, User
 from ..schemas import StepResponse, StepOutputSubmit
+from ..dependencies import get_current_user_or_none
 
 router = APIRouter()
 
 
+def _get_or_create_guest_user(db: Session) -> User:
+    """获取或创建访客用户（用于向后兼容未登录用户）。"""
+    guest = db.query(User).filter(User.username == "guest").first()
+    if not guest:
+        from ..services.auth import get_password_hash
+        guest = User(
+            username="guest",
+            hashed_password=get_password_hash("guest"),
+            is_active=True,
+            is_admin=False,
+        )
+        db.add(guest)
+        db.flush()
+    return guest
+
+
+def _check_plan_ownership(db: Session, step_id: int, user: User):
+    """检查步骤是否属于当前用户。guest用户可见所有步骤。"""
+    step = db.query(LearningStep).filter(LearningStep.id == step_id).first()
+    if not step:
+        raise HTTPException(404, "步骤不存在")
+    is_guest = (user.username == "guest") if user else True
+    if is_guest:
+        plan = db.query(LearningPlan).filter(LearningPlan.id == step.plan_id).first()
+    else:
+        plan = db.query(LearningPlan).filter(
+            LearningPlan.id == step.plan_id,
+            LearningPlan.user_id == user.id,
+        ).first()
+    if not plan:
+        raise HTTPException(403, "无权访问该步骤")
+    return step, plan
+
+
 @router.get("/today", response_model=StepResponse | None)
-def get_today_step(db: Session = Depends(get_db)):
-    """获取今日学习步骤。"""
+def get_today_step(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_or_none),
+):
+    """获取今日学习步骤（属于当前用户）。"""
+    user = current_user or _get_or_create_guest_user(db)
     from datetime import date
     today = date.today()
+    
+    # 获取用户所有活跃计划
+    is_guest = (user.username == "guest") if user else True
+    if is_guest:
+        user_plan_ids = [p.id for p in db.query(LearningPlan.id).filter(
+            LearningPlan.status == "active"
+        ).all()]
+    else:
+        user_plan_ids = [p.id for p in db.query(LearningPlan.id).filter(
+            LearningPlan.user_id == user.id,
+            LearningPlan.status == "active"
+        ).all()]
+    
+    if not user_plan_ids:
+        return None
+    
     step = db.query(LearningStep).filter(
+        LearningStep.plan_id.in_(user_plan_ids),
         LearningStep.date == today,
         LearningStep.status.in_(["available", "in_progress"])
     ).first()
     if not step:
         step = db.query(LearningStep).filter(
+            LearningStep.plan_id.in_(user_plan_ids),
             LearningStep.date >= today,
             LearningStep.status.in_(["available", "in_progress"])
         ).order_by(LearningStep.date).first()
@@ -28,19 +85,28 @@ def get_today_step(db: Session = Depends(get_db)):
 
 
 @router.get("/{step_id}", response_model=StepResponse)
-def get_step(step_id: int, db: Session = Depends(get_db)):
+def get_step(
+    step_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_or_none),
+):
+    """获取步骤详情（需属于当前用户）。"""
+    user = current_user or _get_or_create_guest_user(db)
+    _check_plan_ownership(db, step_id, user)
     step = db.query(LearningStep).filter(LearningStep.id == step_id).first()
-    if not step:
-        raise HTTPException(404, "步骤不存在")
     return step
 
 
 @router.post("/{step_id}/start", response_model=StepResponse)
-def start_step(step_id: int, db: Session = Depends(get_db)):
+def start_step(
+    step_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_or_none),
+):
     """开始学习步骤。"""
-    step = db.query(LearningStep).filter(LearningStep.id == step_id).first()
-    if not step:
-        raise HTTPException(404, "步骤不存在")
+    user = current_user or _get_or_create_guest_user(db)
+    step, _ = _check_plan_ownership(db, step_id, user)
+    
     if step.locked:
         raise HTTPException(403, "步骤已锁定，请先完成前面的步骤。")
     step.status = "in_progress"
@@ -50,11 +116,16 @@ def start_step(step_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/{step_id}/submit-output", response_model=StepResponse)
-def submit_output(step_id: int, output: StepOutputSubmit, db: Session = Depends(get_db)):
+def submit_output(
+    step_id: int,
+    output: StepOutputSubmit,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_or_none),
+):
     """提交学习输出/测试答案，等待AI评审。"""
-    step = db.query(LearningStep).filter(LearningStep.id == step_id).first()
-    if not step:
-        raise HTTPException(404, "步骤不存在")
+    user = current_user or _get_or_create_guest_user(db)
+    step, _ = _check_plan_ownership(db, step_id, user)
+    
     if step.status != "in_progress":
         raise HTTPException(400, "步骤未在进行中")
 
@@ -65,11 +136,14 @@ def submit_output(step_id: int, output: StepOutputSubmit, db: Session = Depends(
 
 
 @router.post("/{step_id}/complete", response_model=StepResponse)
-def complete_step(step_id: int, db: Session = Depends(get_db)):
+def complete_step(
+    step_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user_or_none),
+):
     """完成步骤并解锁下一步（强制输出门控）。"""
-    step = db.query(LearningStep).filter(LearningStep.id == step_id).first()
-    if not step:
-        raise HTTPException(404, "步骤不存在")
+    user = current_user or _get_or_create_guest_user(db)
+    step, plan = _check_plan_ownership(db, step_id, user)
 
     # --- 强制输出门控：必须通过 AI 评审（>=70分）---
     if not step.output_content:
